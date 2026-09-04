@@ -142,12 +142,32 @@ class Workbook:
         return value
 
     def rows(self, path: str) -> list[list[str]]:
+        """Строки листа с сохранением номеров колонок.
+
+        Пустые ячейки в файле просто отсутствуют, и если складывать найденные
+        подряд, колонки съезжают влево: в отчётах, где коды классификации идут
+        тремя колонками и заполнены через одну, наименование уезжает на место
+        кода. Поэтому каждая ячейка кладётся по своему адресу из атрибута r."""
         sheet = self.zip.read(path).decode("utf-8", "ignore")
         out = []
         for row in re.findall(r"<row[^>]*>(.*?)</row>", sheet, re.DOTALL):
-            cells = re.findall(r"<c[^>]*>.*?</c>|<c[^>]*/>", row, re.DOTALL)
-            out.append([self.cell(c).strip() for c in cells])
+            cells: list[str] = []
+            for chunk in re.findall(r"<c[^>]*>.*?</c>|<c[^>]*/>", row, re.DOTALL):
+                ref = re.search(r'\sr="([A-Z]+)\d+"', chunk)
+                index = column_index(ref.group(1)) if ref else len(cells)
+                index = max(index, len(cells))
+                cells += [""] * (index - len(cells))
+                cells.append(self.cell(chunk).strip())
+            out.append(cells)
         return out
+
+
+def column_index(letters: str) -> int:
+    """A -> 0, B -> 1, AA -> 26."""
+    index = 0
+    for char in letters:
+        index = index * 26 + (ord(char) - 64)
+    return index - 1
 
 
 def as_number(raw: str) -> float | None:
@@ -266,11 +286,41 @@ def fact_links(page: str) -> list[tuple[str, int, int]]:
     return [(url, y, m) for (y, m), url in sorted(found.items(), reverse=True)]
 
 
+def sheet_layout(rows: list[list[str]]) -> tuple[int, int]:
+    """Индексы колонки «ГБ» и первой колонки наименования.
+
+    Коды классификации разложены по нескольким колонкам и заполнены через одну,
+    поэтому позиции берутся из шапки, а не из порядка ячеек."""
+    for row in rows[:8]:
+        for i, cell in enumerate(row):
+            if cell.strip().upper() == "ГБ":
+                name_idx = next(
+                    (j for j, c in enumerate(row) if "аименование" in c), i - 1
+                )
+                return i, name_idx
+    raise SourceError("в листе нет колонки «ГБ»")
+
+
+def row_code(row: list[str], name_idx: int) -> str:
+    """Код строки: первая непустая ячейка до колонки наименования."""
+    for cell in row[:name_idx]:
+        code = cell.strip()
+        if code:
+            return code
+    return ""
+
+
 def sheet_total(book: Workbook, path: str) -> float:
     """Строка «Налоговые поступления» листа, в тысячах тенге."""
-    for row in book.rows(path):
-        if len(row) >= 3 and row[0].strip() == "1" and "оступлен" in row[1]:
-            return as_number(row[2]) or 0.0
+    rows = book.rows(path)
+    try:
+        value_idx, name_idx = sheet_layout(rows)
+    except SourceError:
+        return 0.0
+    for row in rows:
+        if len(row) > value_idx and row_code(row, name_idx) == "1":
+            if "оступлен" in row[name_idx]:
+                return as_number(row[value_idx]) or 0.0
     return 0.0
 
 
@@ -299,16 +349,18 @@ def parse_fact(book: Workbook) -> list[dict]:
     paths = [summary] if summary else [path for _, path in book.sheets]
     totals: dict[str, float] = {}
     for path in paths:
-        for row in book.rows(path):
-            if len(row) < 3:
+        rows = book.rows(path)
+        value_idx, name_idx = sheet_layout(rows)
+        for row in rows:
+            if len(row) <= value_idx:
                 continue
-            code = row[0].strip()
+            code = row_code(row, name_idx)
             if not code.isdigit() or len(code) < 6:
                 continue
             group = code[:3]
             if group not in TAX_CODES:
                 continue
-            value = as_number(row[2])
+            value = as_number(row[value_idx])
             if value:
                 totals[group] = totals.get(group, 0.0) + value / 1e6
     if not totals:

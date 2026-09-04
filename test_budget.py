@@ -1,7 +1,6 @@
 """Тесты разбора файлов КГД и блока поступлений на странице налогов."""
 
 import json
-import re
 from pathlib import Path
 
 import pytest
@@ -23,8 +22,6 @@ from budget_block import (
     drill_rules,
     nice_step,
     normalize,
-    period_label,
-    split_block,
 )
 
 
@@ -242,36 +239,15 @@ def test_drill_rules_cover_every_series():
     assert "#rg3" not in rules
 
 
-def test_split_block_shares_sum_to_hundred():
-    html = split_block(sample_budget()["structure"])
-    shares = [float(s.replace(",", ".")) for s in re.findall(r"<span>([\d,]+)%", html)]
-    assert sum(shares) == pytest.approx(100.0, abs=0.2)
-
-
-def test_period_label_says_cumulative_range():
-    assert period_label(sample_budget()["structure"]) == "январь-март 2025"
-
-
-def test_budget_section_shows_skipped_files():
-    """Отброшенный источником файл должен быть назван, а не спрятан."""
-    html, _ = budget_section(sample_budget())
-    assert "2025-04" in html and "прошлогодний файл" in html
-
-
-def test_budget_section_without_structure():
-    data = sample_budget()
-    data["structure"] = None
-    html, rules = budget_section(data)
-    assert "Помесячно" in html and "Разрез по видам" not in html
-
-
 def test_budget_section_empty_without_dynamics():
     assert budget_section({"dynamics": None}) == ("", "")
 
 
 def test_series_count_matches_tabs():
+    """Секция несёт два переключателя: регионы и метрику сравнения."""
     html, _ = budget_section(sample_budget())
-    assert html.count('type="radio"') == html.count("<label for=") == 3
+    assert html.count('name="drill-region"') == html.count('<label for="rg') == 3
+    assert html.count('name="cmp-metric"') == html.count('<label for="md') == 3
 
 
 # --- Сборка страницы -----------------------------------------------------------
@@ -289,6 +265,7 @@ def build_page() -> str:
 def test_page_includes_budget_styles():
     """Прошлый раз стили уехали на прод пустыми: проверяем именно вывод, не константу."""
     page = build_page()
+    assert "Кто платит: регионы" in page
     assert ".drill-tabs label" in page
     assert "#rg1:checked ~ .drill-stage .s1" in page
     assert "{style}" not in page and "{budget}" not in page
@@ -317,5 +294,7 @@ def test_page_declares_dataset():
 def test_page_without_budget_has_no_dataset():
     import build_tax
 
-    data = json.loads((Path(__file__).parent / "out" / "tax.json").read_text(encoding="utf-8"))
+    data = json.loads(
+        (Path(__file__).parent / "out" / "tax.json").read_text(encoding="utf-8")
+    )
     assert "@type" not in build_tax.build(data, None)

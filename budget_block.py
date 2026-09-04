@@ -1,11 +1,11 @@
-"""Блок «Поступления в бюджет» для страницы /radar/tax/.
+"""Региональный разрез поступлений для страницы /radar/tax/.
 
-Три части: карточки итога, помесячный график с переключением по регионам и разрез
-по видам налогов. Переключение сделано на радиокнопках и CSS: страница отдаётся с
+Помесячный график с переключением по областям, рядом с ним сравнение регионов из
+compare_block. Переключение сделано на радиокнопках и CSS: страница отдаётся с
 запретом скриптов (CSP script-src 'none'), и ослаблять его ради интерактива нельзя.
 
-Данные приходят из budget.py: помесячная динамика по регионам за последний
-опубликованный год и разрез по кодам бюджетной классификации нарастающим итогом.
+Данные приходят из budget.py. Итог страны и разрез по видам налогов живут не здесь,
+а в minfin_block: Минфин публикует их на год свежее, чем КГД.
 """
 
 from __future__ import annotations
@@ -51,10 +51,6 @@ PAD_T = 14
 PAD_B = 26
 
 BUDGET_STYLE = """
-.bud-cards { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  margin-block: 1rem; }
-.bud-cards .card { gap: 0.15rem; }
-.bud-cards .num { font-size: 1.375rem; }
 
 .drill { background: var(--card); border: 1px solid var(--muted); border-radius: var(--radius);
   overflow: hidden; margin-block: 1rem; }
@@ -96,19 +92,7 @@ BUDGET_STYLE = """
 .series-legend .k-now { background: var(--accent); }
 .series-legend .k-prev { background: var(--muted); }
 
-.split { display: grid; gap: 0.55rem; margin-block: 1rem; }
-.split-row { display: grid; grid-template-columns: minmax(120px, 15rem) 1fr auto; gap: 0.75rem;
-  align-items: center; font-size: 0.875rem; }
-.split-name { color: var(--fg); }
-.split-track { background: var(--muted); border-radius: 999px; height: 0.6rem; overflow: hidden; }
-.split-fill { display: block; height: 100%; background: var(--accent); border-radius: 999px;
-  transform-origin: left; animation: split-grow 0.6s cubic-bezier(0.2, 0.7, 0.3, 1) both; }
-.split-val { font-family: "JetBrains Mono", ui-monospace, monospace; white-space: nowrap;
-  font-size: 0.8125rem; text-align: right; min-width: 8.5rem; }
-.split-val b { font-weight: 600; }
-.split-val span { display: inline-block; min-width: 3.2rem; color: var(--muted-fg); }
 
-@keyframes split-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @keyframes bar-rise { from { transform: scaleY(0); } to { transform: scaleY(1); } }
 @keyframes series-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
@@ -118,13 +102,8 @@ BUDGET_STYLE = """
   .drill-tabs { flex-wrap: wrap; overflow-x: visible; }
 }
 
-@media (max-width: 34rem) {
-  .split-row { grid-template-columns: 1fr auto; }
-  .split-track { grid-column: 1 / -1; }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .split-fill, .chart .bar-now, .chart .bar-prev, .series { animation: none !important; }
+  .chart .bar-now, .chart .bar-prev, .series { animation: none !important; }
 }
 """
 
@@ -292,7 +271,9 @@ def build_series(dynamics: dict) -> list[dict]:
         total = sum(v for v in region["values"] if v)
         out.append(
             {
-                "name": REGION_LABEL.get(region["name"].strip(), region["name"].strip()),
+                "name": REGION_LABEL.get(
+                    region["name"].strip(), region["name"].strip()
+                ),
                 "values": region["values"],
                 "prev": prev_by_region.get(normalize(region["name"]), [None] * 12),
                 "share": total / country * 100 if country else None,
@@ -344,124 +325,45 @@ def drill_block(dynamics: dict) -> tuple[str, str]:
     return block, drill_rules(len(series))
 
 
-def split_block(structure: dict) -> str:
-    items = structure["items"]
-    total = sum(i["value"] for i in items) or 1
-    rows = []
-    for n, item in enumerate(items):
-        share = item["value"] / total * 100
-        rows.append(
-            f'<div class="split-row">'
-            f'<span class="split-name">{html.escape(item["name"])}</span>'
-            f'<span class="split-track"><i class="split-fill" '
-            f'style="width: {share:.1f}%; animation-delay: {n * 0.05:.2f}s"></i></span>'
-            f'<span class="split-val"><b>{fmt_num(item["value"], 1 if item["value"] < 10 else 0)}</b> '
-            f"<span>{fmt_num(share, 1)}%</span></span></div>"
-        )
-    return f'<div class="split">{"".join(rows)}</div>'
-
-
-def summary_cards(budget: dict) -> str:
-    dynamics = budget["dynamics"]
-    structure = budget.get("structure")
-    series = build_series(dynamics)
-    country, leader = series[0], series[1] if len(series) > 1 else None
-    total = sum(v for v in country["values"] if v)
-    pairs = [(v, p) for v, p in zip(country["values"], country["prev"]) if v and p]
-    cards = [
-        (
-            f"Поступления за {dynamics['year']} год",
-            f"{fmt_num(total, 0)} млрд ₸",
-            "налоги и платежи в государственный бюджет",
-        )
-    ]
-    if pairs:
-        base = sum(p for _, p in pairs)
-        change = (sum(v for v, _ in pairs) / base - 1) * 100
-        sign = "+" if change > 0 else ""
-        prev_year = (dynamics.get("previous") or {}).get("year")
-        cards.append(
-            (
-                "К прошлому году",
-                f"{sign}{fmt_num(change, 1)}%",
-                f"за {len(pairs)} сопоставимых месяцев против {prev_year}",
-            )
-        )
-    if leader:
-        cards.append(
-            (
-                "Крупнейший источник",
-                html.escape(leader["name"]),
-                f"{fmt_num(leader['share'] or 0, 1)}% всех поступлений страны",
-            )
-        )
-    if structure:
-        top = structure["items"][0]
-        share = top["value"] / sum(i["value"] for i in structure["items"]) * 100
-        cards.append(
-            (
-                "Главный налог",
-                html.escape(top["name"]),
-                f"{fmt_num(share, 1)}% разреза за {period_label(structure)}",
-            )
-        )
-    return (
-        '<div class="bud-cards">'
-        + "".join(
-            f'<article class="card"><h3>{title}</h3>'
-            f'<p class="value"><span class="num">{value}</span></p>'
-            f'<p class="asof">{note}</p></article>'
-            for title, value, note in cards
-        )
-        + "</div>"
-    )
-
-
-def period_label(structure: dict) -> str:
-    """«январь-март 2025»: файлы КГД идут нарастающим итогом с начала года."""
-    months = structure.get("months") or int(structure["period"][5:7])
-    year = structure["year"]
-    if months == 1:
-        return f"{MONTH_CASE[0]} {year}"
-    return f"{MONTH_CASE[0]}-{MONTH_CASE[months - 1]} {year}"
-
-
 def budget_section(budget: dict) -> tuple[str, str]:
-    """HTML блока и дополнительные CSS-правила под число регионов."""
+    """Региональный разрез: HTML блока и CSS-правила под число регионов.
+
+    Итог страны и разрез по видам налогов сюда не входят: они берутся у Минфина,
+    который публикует их на год свежее. У КГД остаётся то, чего больше нигде нет,
+    разбивка по областям."""
     dynamics = budget.get("dynamics")
     if not dynamics:
         return "", ""
-    structure = budget.get("structure")
+    from compare_block import compare_block  # цикл на уровне модуля: он берёт build_series
+
     drill, rules = drill_block(dynamics)
+    compare, compare_rules_css = compare_block(dynamics)
+    year = dynamics["year"]
     parts = [
-        "<h2>Сколько собирают на самом деле</h2>",
-        '<p class="lede">Ставки в таблицах выше это норма. Ниже фактические поступления '
-        "в государственный бюджет по данным Комитета государственных доходов: помесячно, "
-        "с переключением на любой регион.</p>",
-        summary_cards(budget),
-        f"<h3>Помесячно, {dynamics['year']} год</h3>",
+        "<h2>Кто платит: регионы</h2>",
+        '<p class="lede">Разбивку по областям публикует только Комитет государственных '
+        f"доходов, и его последний такой файл за {year} год. Цифры страны выше свежее: "
+        "они из ежемесячных отчётов Минфина.</p>",
+        f"<h3>Помесячно, {year} год</h3>",
         '<p class="lede">Выберите регион. Столбик поменьше это тот же месяц прошлого года, '
         "наведение показывает точную сумму.</p>",
         drill,
     ]
-    if structure:
+    if compare:
         parts += [
-            f"<h3>Разрез по видам налогов, {period_label(structure)}</h3>",
-            '<p class="lede">Нарастающим итогом с начала года, млрд тенге. '
-            "Группы даны по кодам бюджетной классификации.</p>",
-            split_block(structure),
+            "<h3>Все регионы сразу</h3>",
+            '<p class="lede">Один и тот же год в трёх разрезах: сколько собрал регион, '
+            "насколько вырос и сколько дал общему приросту страны.</p>",
+            compare,
         ]
-    notes = ["<li>Суммы приведены в млрд тенге, источник публикует тысячи.</li>"]
-    if structure and structure.get("skipped"):
-        notes.append(
-            "<li>Пропущены файлы, у которых дата правки не совпадает с заявленным "
-            f"периодом: {html.escape(', '.join(structure['skipped']))}. Такие ссылки на "
-            "сайте источника ведут на прошлогодний файл, и их цифры не публикуются здесь.</li>"
-        )
-    notes.append(
-        "<li>Периоды разреза и помесячной динамики различаются: источник обновляет их "
-        "разными файлами и с разной задержкой. Каждый подписан своей датой.</li>"
-    )
+        rules += compare_rules_css
+    notes = [
+        "<li>Суммы приведены в млрд тенге, источник публикует тысячи.</li>",
+        "<li>Строка «КГД, центральный аппарат» это не регион, а платежи, "
+        "администрируемые центральным аппаратом комитета.</li>",
+        "<li>Рост и вклад в прирост считаются только по месяцам, закрытым в обоих "
+        "годах: файл прошлого года у источника бывает неполным.</li>",
+    ]
     parts.append(
         "<details><summary>Как читать эти цифры</summary>"
         f'<div class="details-body"><ul>{"".join(notes)}</ul></div></details>'
