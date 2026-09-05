@@ -16,6 +16,7 @@ TABS = [
     ("hub", "Обзор", "/macroradar/"),
     ("macro", "Макро", "/macroradar/macro/"),
     ("trade", "Торговля", "/macroradar/trade/"),
+    ("fund", "Нацфонд", "/macroradar/national-fund/"),
     ("budget", "Бюджет", "/macroradar/budget/"),
     ("tax", "Ставки", "/macroradar/tax/"),
 ]
@@ -46,9 +47,9 @@ HEADER_STYLE = """
   .site-bar .inner { height: auto; min-height: 52px; padding-block: 0.65rem; align-items: flex-start; }
   .site-brand { flex: 0 0 auto; }
   .site-links { justify-content: flex-end; gap: 0.35rem 0.7rem; font-size: 0.75rem; }
-  .tabs .inner { justify-content: space-between; padding-inline: 0.65rem; overflow-x: visible; }
+  .tabs .inner { justify-content: flex-start; padding-inline: 0.65rem; overflow-x: auto; }
   .tabs .title { display: none; }
-  .tabs a { padding-inline: 0.45rem; font-size: 0.8125rem; }
+  .tabs a { padding-inline: 0.25rem; font-size: 0.75rem; }
 }
 @media print { .site-bar, .tabs { display: none; } }
 """

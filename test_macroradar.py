@@ -10,7 +10,7 @@ def test_hub_has_all_analysis_links_and_metadata():
     assert 'rel="canonical" href="https://jbs.finance/macroradar/"' in page
     assert 'property="og:url" content="https://jbs.finance/macroradar/"' in page
     assert '"@type": "CollectionPage"' in page
-    for path in ("macro", "trade", "budget", "tax"):
+    for path in ("macro", "trade", "national-fund", "budget", "tax"):
         assert f'href="/macroradar/{path}/"' in page
 
 

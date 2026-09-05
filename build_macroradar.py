@@ -25,7 +25,7 @@ HUB_STYLE = """
 .radar-card:hover, .radar-card:focus-visible { transform: translateY(-4px); box-shadow: 0 14px 26px rgba(44, 36, 32, 0.11); outline: none; }
 .radar-card:focus-visible { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--accent); }
 .radar-card--macro { --card-tone: #A8522F; } .radar-card--trade { --card-tone: #2F6B4F; }
-.radar-card--budget { --card-tone: #8A6A2C; } .radar-card--tax { --card-tone: #755C8C; }
+.radar-card--fund { --card-tone: #2F6B4F; } .radar-card--budget { --card-tone: #8A6A2C; } .radar-card--tax { --card-tone: #755C8C; }
 .card-kicker { margin: 0; color: var(--card-tone); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; }
 .radar-card h2 { margin: 0.35rem 0 0.65rem; font-family: Georgia, "Times New Roman", serif; font-size: clamp(1.6rem, 3vw, 2.3rem); letter-spacing: -0.025em; line-height: 1.05; }
 .radar-card p { max-width: 38ch; margin: 0; color: var(--muted-fg); font-size: 0.95rem; }
@@ -46,7 +46,7 @@ def page_jsonld() -> str:
             "@context": "https://schema.org",
             "@type": "CollectionPage",
             "name": "Macro Radar Казахстана",
-            "description": "Открытые данные о макроэкономике, торговле, бюджете и налогах Казахстана.",
+            "description": "Открытые данные о макроэкономике, торговле, Нацфонде, бюджете и налогах Казахстана.",
             "url": "https://jbs.finance/macroradar/",
             "inLanguage": "ru-KZ",
             "isPartOf": {"@type": "WebSite", "name": "JB Solutions", "url": "https://jbs.finance"},
@@ -55,6 +55,7 @@ def page_jsonld() -> str:
                 for name, path in (
                     ("Макроэкономика Казахстана", "/macroradar/macro/"),
                     ("Внешняя торговля Казахстана", "/macroradar/trade/"),
+                    ("Национальный фонд Казахстана", "/macroradar/national-fund/"),
                     ("Бюджет Казахстана", "/macroradar/budget/"),
                     ("Налоги Казахстана", "/macroradar/tax/"),
                 )
@@ -67,8 +68,8 @@ def page_jsonld() -> str:
 def build() -> str:
     return TEMPLATE.format(
         meta=meta_tags(
-            "Macro Radar Казахстана: экономика, торговля, бюджет и налоги",
-            "Открытые данные для решений в Казахстане: макроэкономика, внешняя торговля, бюджет и налоговые ставки.",
+            "Macro Radar Казахстана: экономика, торговля, Нацфонд, бюджет и налоги",
+            "Открытые данные для решений в Казахстане: макроэкономика, внешняя торговля, Нацфонд, бюджет и налоговые ставки.",
             "/macroradar/",
         ) + "\n" + page_jsonld(),
         header=site_header("hub"),
@@ -94,7 +95,7 @@ TEMPLATE = """<!doctype html>
     <header class="radar-hero">
       <p class="eyebrow">JB Solutions</p>
       <h1>Macro Radar Казахстана</h1>
-      <p class="lede">Четыре самостоятельных среза экономики, чтобы быстрее увидеть условия для решений, а не искать цифры в разрозненных отчётах.</p>
+      <p class="lede">Пять самостоятельных срезов экономики, чтобы быстрее увидеть условия для решений, а не искать цифры в разрозненных отчётах.</p>
     </header>
 
     <p class="reading-note">Каждая страница показывает дату данных и первоисточник. Это ориентир для анализа, не персональная инвестиционная или налоговая рекомендация.</p>
@@ -107,6 +108,10 @@ TEMPLATE = """<!doctype html>
       <a class="radar-card radar-card--trade" href="/macroradar/trade/">
         <div><p class="card-kicker">Связь с внешним рынком</p><h2>Торговля</h2><p>Экспорт, импорт, партнёры и товарные группы. Где меняется внешний спрос и зависимость от поставок.</p></div>
         <span class="card-link"><span>Открыть анализ торговли</span><span aria-hidden="true">↗</span></span>
+      </a>
+      <a class="radar-card radar-card--fund" href="/macroradar/national-fund/">
+        <div><p class="card-kicker">Подушка государства</p><h2>Нацфонд</h2><p>Валютные активы и доходность за 10 лет. Отдельно отмечено, какие показатели доступны регулярно, а какие нет.</p></div>
+        <span class="card-link"><span>Открыть радар Нацфонда</span><span aria-hidden="true">↗</span></span>
       </a>
       <a class="radar-card radar-card--budget" href="/macroradar/budget/">
         <div><p class="card-kicker">Факт против плана</p><h2>Бюджет</h2><p>Поступления, исполнение плана и регионы. Как наполняется бюджет и где меняется налоговая база.</p></div>
