@@ -36,11 +36,11 @@ HEADER_STYLE = """
   transition: box-shadow var(--dur-in) var(--ease-out); }
 .tabs .inner { max-width: 1120px; margin-inline: auto; padding-inline: clamp(1rem, 4vw, 2.5rem);
   display: flex; gap: 0.1rem; overflow-x: auto; scrollbar-width: thin; }
-.tabs a { display: inline-block; padding: 0.8rem 0.75rem; color: var(--muted-fg); text-decoration: none;
+.tabs a, .tabs label { display: inline-block; padding: 0.8rem 0.75rem; color: var(--muted-fg); text-decoration: none;
   font-size: 0.9375rem; font-weight: 500; border-bottom: 2px solid transparent; white-space: nowrap;
   transition: color var(--dur-in) var(--ease-out), border-color var(--dur-in) var(--ease-out); }
-.tabs a[aria-current="page"] { color: var(--fg); border-bottom-color: var(--accent); }
-.tabs a:hover, .tabs a:focus-visible { color: var(--fg); }
+.tabs a[aria-current="page"], .tabs label:hover { color: var(--fg); border-bottom-color: var(--accent); }
+.tabs a:hover, .tabs a:focus-visible, .tabs label:focus-visible { color: var(--fg); }
 .tabs .title { margin-inline-end: auto; padding: 0.8rem 0.75rem 0.8rem 0; font-weight: 600; color: var(--fg); font-size: 0.9375rem; white-space: nowrap; }
 [id] { scroll-margin-top: 64px; }
 @media (max-width: 640px) {
@@ -49,19 +49,25 @@ HEADER_STYLE = """
   .site-links { justify-content: flex-end; gap: 0.35rem 0.7rem; font-size: 0.75rem; }
   .tabs .inner { justify-content: flex-start; padding-inline: 0.65rem; overflow-x: auto; }
   .tabs .title { display: none; }
-  .tabs a { padding-inline: 0.25rem; font-size: 0.75rem; }
+  .tabs a, .tabs label { padding-inline: 0.25rem; font-size: 0.75rem; }
 }
 @media print { .site-bar, .tabs { display: none; } }
 """
 
 
-def site_header(active: str) -> str:
+def site_header(active: str, tabs_as_controls: bool = False) -> str:
     """Тёмная полоса сайта плюс липкие вкладки радара."""
-    tabs = "\n".join(
-        f'      <a href="{href}">{label}</a>' if key != active
-        else f'      <a href="{href}" aria-current="page">{label}</a>'
-        for key, label, href in TABS
-    )
+    if tabs_as_controls:
+        tabs = "\n".join(
+            f'      <label for="view-{key}">{label}</label>'
+            for key, label, _ in TABS
+        )
+    else:
+        tabs = "\n".join(
+            f'      <a href="{href}">{label}</a>' if key != active
+            else f'      <a href="{href}" aria-current="page">{label}</a>'
+            for key, label, href in TABS
+        )
     return f"""<div class="site-bar">
   <div class="inner">
     <a class="site-brand" href="{SITE}/ru"><span class="mark">JB</span>JB Solutions</a>

@@ -35,6 +35,12 @@ HUB_STYLE = """
 .card-link { display: flex; justify-content: space-between; align-items: center; margin-top: 1.75rem; padding-top: .85rem; border-top: 1px solid var(--muted); color: var(--fg); font-size: .875rem; font-weight: 650; }
 .card-link span:last-child { color: var(--card-tone); font-size: 1.25rem; line-height: 1; }
 .analysis-section { padding-block: clamp(3rem, 8vw, 6rem); border-top: 1px solid var(--muted); }
+.tab-state { position: fixed; opacity: 0; pointer-events: none; }
+.tab-panel { display: none; }
+#view-hub:checked ~ .wrap .panel-hub, #view-macro:checked ~ .wrap .panel-macro, #view-trade:checked ~ .wrap .panel-trade, #view-fund:checked ~ .wrap .panel-national-fund, #view-budget:checked ~ .wrap .panel-budget, #view-tax:checked ~ .wrap .panel-tax { display: block; }
+#view-hub:checked ~ .tabs label[for="view-hub"], #view-macro:checked ~ .tabs label[for="view-macro"], #view-trade:checked ~ .tabs label[for="view-trade"], #view-fund:checked ~ .tabs label[for="view-fund"], #view-budget:checked ~ .tabs label[for="view-budget"], #view-tax:checked ~ .tabs label[for="view-tax"] { color: var(--fg); border-bottom-color: var(--accent); }
+.radar-card { cursor: pointer; }
+.inline-tab-link { color: var(--accent); cursor: pointer; text-decoration: underline; }
 .method { padding: clamp(1.25rem, 3vw, 2rem); margin-bottom: 3rem; background: #EDE4D5; border-left: 3px solid var(--accent); }
 .method h2 { margin: 0 0 .5rem; font-family: Georgia, "Times New Roman", serif; font-size: 1.5rem; }
 .method p { max-width: 70ch; margin: 0; color: var(--muted-fg); }
@@ -52,7 +58,7 @@ SECTIONS = (
 
 
 def page_jsonld() -> str:
-    payload = {"@context": "https://schema.org", "@type": "CollectionPage", "name": "Macro Radar Казахстана", "description": "Открытые данные о макроэкономике, торговле, Нацфонде, бюджете и налогах Казахстана.", "url": "https://jbs.finance/macroradar/", "inLanguage": "ru-KZ", "isPartOf": {"@type": "WebSite", "name": "JB Solutions", "url": "https://jbs.finance"}, "hasPart": [{"@type": "Dataset", "name": name, "url": f"https://jbs.finance/macroradar/#{anchor}"} for anchor, name, _, _ in SECTIONS]}
+    payload = {"@context": "https://schema.org", "@type": "CollectionPage", "name": "Macro Radar Казахстана", "description": "Открытые данные о макроэкономике, торговле, Нацфонде, бюджете и налогах Казахстана.", "url": "https://jbs.finance/macroradar/", "inLanguage": "ru-KZ", "isPartOf": {"@type": "WebSite", "name": "JB Solutions", "url": "https://jbs.finance"}, "hasPart": [{"@type": "Dataset", "name": name} for _, name, _, _ in SECTIONS]}
     return '<script type="application/ld+json">' + json.dumps(payload, ensure_ascii=False) + "</script>"
 
 
@@ -70,8 +76,11 @@ def page_content(document: str) -> str:
         raise ValueError("У анализа отсутствует контейнер .wrap")
     content = re.sub(r"<footer>.*?</footer>", "", match.group(1), flags=re.DOTALL)
     content = re.sub(r'<section class="cta".*?</section>', "", content, flags=re.DOTALL)
-    for anchor, _, _, _ in SECTIONS:
-        content = content.replace(f'href="/macroradar/{anchor}/"', f'href="#{anchor}"')
+    content = re.sub(
+        r'<a href="/macroradar/(macro|trade|national-fund|budget|tax)/">(.*?)</a>',
+        lambda match: f'<label class="inline-tab-link" for="view-{match.group(1)}">{match.group(2)}</label>',
+        content,
+    )
     return content.replace("<main>", "").replace("</main>", "")
 
 
@@ -81,26 +90,28 @@ def load_json(path: str) -> dict:
 
 def build(radar: dict, pulse: dict, trade: dict, national_fund: dict, tax: dict, minfin: dict | None = None, budget: dict | None = None, oblast: dict | None = None) -> str:
     documents = (build_radar(radar, pulse, trade), build_trade(trade), build_national_fund(national_fund), build_budget(minfin, budget, oblast), build_tax(tax))
-    sections = "\n".join(f'<section id="{anchor}" class="analysis-section" aria-label="{name}">\n{page_content(document)}\n</section>' for (anchor, name, _, _), document in zip(SECTIONS, documents))
-    cards = "\n".join(f'''      <a class="radar-card radar-card--{'fund' if anchor == 'national-fund' else anchor}" href="#{anchor}">
+    sections = "\n".join(f'<section class="analysis-section tab-panel panel-{anchor}" aria-label="{name}">\n{page_content(document)}\n</section>' for (anchor, name, _, _), document in zip(SECTIONS, documents))
+    cards = "\n".join(f'''      <label class="radar-card radar-card--{'fund' if anchor == 'national-fund' else anchor}" for="view-{'fund' if anchor == 'national-fund' else anchor}">
         <div><p class="card-kicker">{kicker}</p><h2>{name}</h2><p>{description}</p></div>
         <span class="card-link"><span>Перейти к анализу</span><span aria-hidden="true">↓</span></span>
-      </a>''' for anchor, name, kicker, description in SECTIONS)
-    return TEMPLATE.format(meta=meta_tags("Macro Radar Казахстана: экономика, торговля, Нацфонд, бюджет и налоги", "Открытые данные для решений в Казахстане: макроэкономика, внешняя торговля, Нацфонд, бюджет и налоговые ставки.", "/macroradar/") + "\n" + page_jsonld(), header=site_header("hub"), style=HUB_STYLE + HEADER_STYLE + "\n".join(page_style(document) for document in documents), cards=cards, sections=sections, year=date.today().year)
+      </label>''' for anchor, name, kicker, description in SECTIONS)
+    return TEMPLATE.format(meta=meta_tags("Macro Radar Казахстана: экономика, торговля, Нацфонд, бюджет и налоги", "Открытые данные для решений в Казахстане: макроэкономика, внешняя торговля, Нацфонд, бюджет и налоговые ставки.", "/macroradar/") + "\n" + page_jsonld(), header=site_header("hub", tabs_as_controls=True), style=HUB_STYLE + HEADER_STYLE + "\n".join(page_style(document) for document in documents), cards=cards, sections=sections, year=date.today().year)
 
 
 TEMPLATE = """<!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'none'; img-src 'self' https://jbs.finance; font-src 'self'; base-uri 'none'; form-action 'none'">
 {meta}<title>Macro Radar Казахстана</title><style>{style}</style></head><body>
+<input class="tab-state" type="radio" name="radar-view" id="view-hub" checked><input class="tab-state" type="radio" name="radar-view" id="view-macro"><input class="tab-state" type="radio" name="radar-view" id="view-trade"><input class="tab-state" type="radio" name="radar-view" id="view-fund"><input class="tab-state" type="radio" name="radar-view" id="view-budget"><input class="tab-state" type="radio" name="radar-view" id="view-tax">
 {header}<div class="wrap"><main>
+<section class="tab-panel panel-hub">
 <header id="overview" class="radar-hero"><p class="eyebrow">JB Solutions</p><h1>Macro Radar Казахстана</h1><p class="lede">Пять срезов экономики на одной странице: от макроусловий и торговли до Нацфонда, бюджета и налогов.</p></header>
 <p class="reading-note">Выбери анализ плиткой или вкладкой выше. У каждого показателя указаны дата и первоисточник. Это ориентир для анализа, не персональная инвестиционная или налоговая рекомендация.</p>
 <section class="radar-grid" aria-label="Анализы Macro Radar">
 {cards}
 </section>
 {sections}
-<aside class="method" aria-labelledby="method-title"><h2 id="method-title">Как читать радар</h2><p>Мы не смешиваем норму, фактические поступления и макроиндикаторы в одну таблицу. Сначала выбери вопрос, затем проверь дату и источник конкретного показателя.</p></aside>
+<aside class="method" aria-labelledby="method-title"><h2 id="method-title">Как читать радар</h2><p>Мы не смешиваем норму, фактические поступления и макроиндикаторы в одну таблицу. Сначала выбери вопрос, затем проверь дату и источник конкретного показателя.</p></aside></section>
 </main><footer><p>© {year} JB Solutions. Данные собираются из открытых источников.</p></footer></div></body></html>"""
 
 

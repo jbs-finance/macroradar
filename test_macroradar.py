@@ -29,15 +29,14 @@ def page() -> str:
     return build(data("radar.json"), data("pulse.json"), data("trade.json"), national_fund(), data("tax.json"), data("minfin.json"), data("budget.json"), data("oblast.json"))
 
 
-def test_root_has_all_analyses_as_anchors_and_metadata():
+def test_root_has_all_analyses_as_tabs_and_metadata():
     document = page()
     assert 'rel="canonical" href="https://jbs.finance/macroradar/"' in document
     assert 'property="og:url" content="https://jbs.finance/macroradar/"' in document
     assert '"@type": "CollectionPage"' in document
-    for anchor in ("macro", "trade", "national-fund", "budget", "tax"):
-        assert document.count(f'id="{anchor}"') == 1
-        assert f'href="#{anchor}"' in document
-        assert f'jbs.finance/macroradar/#{anchor}' in document
+    for view in ("hub", "macro", "trade", "fund", "budget", "tax"):
+        assert f'id="view-{view}"' in document
+        assert f'for="view-{view}"' in document
 
 
 def test_root_includes_fund_portfolio_and_no_analysis_page_links():
@@ -47,6 +46,7 @@ def test_root_includes_fund_portfolio_and_no_analysis_page_links():
     assert "Альтернативные инструменты" in document
     assert "не доли всего Нацфонда на текущую дату" in document
     assert not re.search(r'href="/macroradar/(macro|trade|national-fund|budget|tax)/"', document)
+    assert 'href="#macro"' not in document
 
 
 def test_root_is_self_contained_and_csp_prohibits_executable_scripts():
