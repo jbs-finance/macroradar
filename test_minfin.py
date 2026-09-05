@@ -31,6 +31,17 @@ def money(value: float) -> str:
     return str(value * 1e6)
 
 
+def header_row() -> list[str]:
+    """Шапка отчёта: по ней ищутся колонки плана, факта и процента."""
+    row = [""] * 17
+    row[0] = "Коды бюджетной классификации"
+    row[1] = "Наименование"
+    row[10] = "Сводный план поступлений и финансирования обязательств"
+    row[11] = "Принятые обязательства"
+    row[15] = "Исп-е поступ-ий бюджета к плану на период, %"
+    return row
+
+
 def report_rows() -> list[list[str]]:
     """Отчёт: коды в первой колонке, наименование сдвигается по уровню вложенности."""
     head = [""] * 17
@@ -42,6 +53,7 @@ def report_rows() -> list[list[str]]:
     )
     return [
         head,
+        header_row(),
         ["I. ДОХОДЫ"]
         + [""] * 6
         + ["", "", "", money(200), money(190), "", "", "", "95", ""],
@@ -105,8 +117,9 @@ def test_parse_report_ignores_deeper_levels():
 
 def test_parse_report_rejects_mismatch():
     rows = report_rows()
-    rows[3][10] = money(600)  # план подоходного, факт оставим прежним
-    rows[3][11] = money(500)
+    tax_row = next(r for r in rows if r[1:7] == ["", "Подоходный налог", "", "", "", ""])
+    tax_row[10] = money(600)
+    tax_row[11] = money(500)
     with pytest.raises(Exception):
         parse_report(FakeBook(rows))
 
@@ -369,15 +382,17 @@ def test_page_dataset_names_both_sources():
 def income_rows() -> list[list[str]]:
     """Категории доходов, а следом функциональные группы затрат."""
     def row(code, level, name, plan, fact):
+        # Процент считается из плана и факта: разбор ищет колонку исполнения именно
+        # по совпадению с ним.
         return (
             [code]
             + ["" if i != level else name for i in range(1, 7)]
             + ["", "", ""]
-            + [money(plan), money(fact), "", "", "", "95", ""]
+            + [money(plan), money(fact), "", "", "", f"{fact / plan * 100:.2f}", ""]
         )
 
     return [
-        ["Коды бюджетной классификации", "Наименование"] + [""] * 15,
+        header_row(),
         ["1", "2"] + [""] * 15,
         row("1", 1, "Налоговые поступления", 100, 96),
         row("01", 2, "Подоходный налог", 60, 54),

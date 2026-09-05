@@ -26,11 +26,18 @@ from layout import (
     meta_tags,
     site_header,
 )
-from minfin_block import LEVELS_STYLE, MINFIN_STYLE, minfin_section, period_label
+from minfin_block import (
+    LEVELS_STYLE,
+    MINFIN_STYLE,
+    OBLAST_STYLE,
+    minfin_section,
+    period_label,
+)
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_OUT = HERE / "out" / "budget.html"
 MINFIN = HERE / "out" / "minfin.json"
+OBLAST = HERE / "out" / "oblast.json"
 BUDGET = HERE / "out" / "budget.json"
 
 BUDGET_PAGE_STYLE = """
@@ -72,8 +79,14 @@ def page_jsonld(minfin: dict | None, budget: dict | None, generated: datetime) -
     )
 
 
-def build(minfin: dict | None = None, budget: dict | None = None) -> str:
+def build(
+    minfin: dict | None = None,
+    budget: dict | None = None,
+    oblast: dict | None = None,
+) -> str:
     generated = datetime.now()
+    if minfin and oblast:
+        minfin = {**minfin, "oblast": oblast}
     regions_html, drill_rules = budget_section(budget) if budget else ("", "")
     latest = (minfin or {}).get("latest")
     period = (
@@ -95,6 +108,7 @@ def build(minfin: dict | None = None, budget: dict | None = None) -> str:
         + CTA_STYLE
         + MINFIN_STYLE
         + LEVELS_STYLE
+        + OBLAST_STYLE
         + BUDGET_STYLE
         + COMPARE_STYLE
         + BUDGET_PAGE_STYLE
@@ -157,6 +171,7 @@ def main() -> None:
     out = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_OUT
     minfin_path = Path(sys.argv[2]) if len(sys.argv) > 2 else MINFIN
     budget_path = Path(sys.argv[3]) if len(sys.argv) > 3 else BUDGET
+    oblast_path = Path(sys.argv[4]) if len(sys.argv) > 4 else OBLAST
 
     minfin = None
     if minfin_path.exists():
@@ -169,8 +184,14 @@ def main() -> None:
         if not budget.get("dynamics"):
             budget = None
 
+    oblast = None
+    if oblast_path.exists():
+        oblast = json.loads(oblast_path.read_text(encoding="utf-8"))
+        if not oblast.get("regions"):
+            oblast = None
+
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(build(minfin, budget), encoding="utf-8")
+    out.write_text(build(minfin, budget, oblast), encoding="utf-8")
     print(f"Страница собрана: {out} ({out.stat().st_size // 1024} КБ)")
 
 

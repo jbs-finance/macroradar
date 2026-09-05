@@ -392,6 +392,7 @@ def minfin_section(data: dict | None) -> str:
         "сводный план поступлений на отчётный период, а не годовой бюджет.</p>",
         plan_table(latest),
         levels_section(data),
+        oblast_section(data.get("oblast")),
     ]
     notes = [
         "<li>Помесячные суммы вычислены как разности накопительных отчётов: "
@@ -536,5 +537,98 @@ def levels_section(data: dict) -> str:
             '<p class="lv-legend"><span><i class="own"></i>налоги</span>'
             '<span><i class="other"></i>прочие доходы</span>'
             '<span><i class="transfer"></i>трансферты</span></p>',
+        ]
+    )
+
+
+OBLAST_STYLE = """
+.obl { display: grid; gap: 0.5rem; margin-block: 1rem; }
+.obl-row { background: var(--card); border: 1px solid var(--muted); border-radius: var(--radius);
+  padding: 0.7rem 0.9rem; display: grid; gap: 0.5rem 1rem; align-items: center;
+  grid-template-columns: minmax(9rem, 14rem) 1fr minmax(8rem, 12rem); }
+.obl-name { font-weight: 600; font-size: 0.9375rem; }
+.obl-name span { display: block; font-weight: 400; font-size: 0.75rem; color: var(--muted-fg); }
+.obl-mix { display: flex; height: 0.7rem; border-radius: 999px; overflow: hidden;
+  background: var(--muted); }
+.obl-mix i { display: block; animation: lv-grow 0.6s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  transform-origin: left; }
+.obl-mix i.own { background: var(--accent); }
+.obl-mix i.transfer { background: #8C7B6B; }
+.obl-figures { text-align: right; font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.8125rem; }
+.obl-figures b { display: block; font-size: 0.9375rem; }
+.obl-figures span { color: var(--muted-fg); }
+.obl-note { font-size: 0.8125rem; color: var(--muted-fg); }
+
+@media (max-width: 40rem) {
+  .obl-row { grid-template-columns: 1fr auto; }
+  .obl-mix { grid-column: 1 / -1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .obl-mix i { animation: none; }
+}
+"""
+
+
+def plural(count: int, one: str, many: str, few: str) -> str:
+    """Русское склонение при числе: 1 региона, 2 региона, 5 регионов."""
+    tail = count % 100
+    if 11 <= tail <= 14:
+        word = many
+    elif count % 10 == 1:
+        word = one
+    elif count % 10 in (2, 3, 4):
+        word = few
+    else:
+        word = many
+    return f"{count} {word}"
+
+
+def oblast_section(data: dict | None) -> str:
+    """Свежие отчёты областей: у каждой свой период, поэтому это список, а не рейтинг.
+
+    Собрать полную картину по стране из этих отчётов нельзя: часть управлений
+    финансов публикует форму, которую невозможно прочитать машиной, часть отстала
+    на годы. Поэтому здесь честный список тех, кто отчитался, а сопоставимый разрез
+    по всем областям остаётся за данными КГД."""
+    regions = (data or {}).get("regions") or []
+    if not regions:
+        return ""
+    rows = []
+    for region in regions:
+        total = region["total"] or 1
+        own = max(total - region["transfers"], 0)
+        own_share = own / total * 100
+        period = period_label(region["year"], region["months"])
+        pct = region.get("pct")
+        rows.append(
+            f'<div class="obl-row">'
+            f'<span class="obl-name">{html.escape(region["name"])}'
+            f"<span>{period}{' · данные прошлого сбора' if region.get('stale') else ''}"
+            f"</span></span>"
+            f'<span class="obl-mix">'
+            f'<i class="own" style="width: {own_share:.1f}%"></i>'
+            f'<i class="transfer" style="width: {100 - own_share:.1f}%; '
+            f'animation-delay: 0.08s"></i></span>'
+            f'<span class="obl-figures"><b>{fmt_num(region["total"], 0)} млрд</b>'
+            f'<span>своих {fmt_num(own_share, 0)}%'
+            f'{f", план {fmt_num(pct, 0)}%" if pct else ""}</span></span>'
+            f"</div>"
+        )
+    note = (
+        f'<p class="obl-note">Машиночитаемый свежий отчёт нашёлся у '
+        f"{plural(len(regions), 'региона', 'регионов', 'региона')} из двадцати. "
+        "Остальные выкладывают документ Word, форму без плановых колонок или "
+        "отстают на годы: их цифры сюда не попадают, чтобы не смешивать периоды.</p>"
+    )
+    return "\n".join(
+        [
+            "<h3>Свежие отчёты областей</h3>",
+            '<p class="lede">Каждое областное управление финансов публикует своё '
+            "исполнение бюджета отдельно и в свой срок. Полоса показывает, какую долю "
+            "доходов регион собирает сам, а какую получает трансфертами.</p>",
+            f'<div class="obl">{"".join(rows)}</div>',
+            note,
         ]
     )

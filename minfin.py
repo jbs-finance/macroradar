@@ -105,7 +105,8 @@ TITLES = {
     ),
 }
 
-# Колонки отчёта: план на отчётный период, исполнено, процент исполнения.
+# Колонки отчёта Минфина: план на отчётный период, исполнено, процент исполнения.
+# У областных отчётов раскладка своя, поэтому есть report_layout.
 COL_PLAN = 10
 COL_FACT = 11
 COL_PCT = 15
@@ -194,6 +195,74 @@ def fetch_report(report: dict) -> Workbook:
     return Workbook(path.read_bytes())
 
 
+def report_layout(rows: list[list[str]]) -> tuple[int, int, int, int]:
+    """Колонки отчёта об исполнении: план, факт, процент и левый край наименований.
+
+    Форма одна и та же, но раскладка колонок у Минфина и у областей разная, а факт
+    в разных отчётах подписан то «Принятые обязательства», то «Исполнение
+    поступлений». Поэтому колонки ищутся по шапке, а выбор факта проверяется
+    процентом исполнения из самого отчёта."""
+    header = None
+    plan_mark = None
+    for index, row in enumerate(rows[:14]):
+        # Шапка бывает разбита на две строки: в одной наименование, в соседней
+        # подписи плановых колонок. Читаются они только вместе.
+        following = rows[index + 1] if index + 1 < len(rows) else []
+        width = max(len(row), len(following))
+        row = [
+            " ".join(
+                part
+                for part in (
+                    row[i] if i < len(row) else "",
+                    following[i] if i < len(following) else "",
+                )
+                if part.strip()
+            )
+            for i in range(width)
+        ]
+        joined = " ".join(row).lower()
+        if "наименование" not in joined:
+            continue
+        # Форма 7-ОИБ подписывает плановую колонку «Сводный план», а сводки
+        # областей, где рядом стоят прошлые годы, пишут «План на <дата>».
+        for mark in ("сводный план", "план на "):
+            if mark in joined:
+                header, plan_mark = row, mark
+                break
+        if header is not None:
+            break
+    if header is None:
+        raise SourceError("в отчёте нет шапки со сводным планом")
+
+    col_plan = next(i for i, c in enumerate(header) if plan_mark in c.lower())
+    name_col = next(i for i, c in enumerate(header) if "наименование" in c.lower())
+    col_pct = next(
+        (
+            i
+            for i, c in enumerate(header)
+            if "к плану на период" in c.lower() or "исп-е поступ" in c.lower()
+        ),
+        -1,
+    )
+
+    # Первая колонка правее плана, где число сходится с процентом исполнения.
+    candidates = [
+        i
+        for i in range(col_plan + 1, len(header) + 6)
+        if col_pct < 0 or i != col_pct
+    ]
+    for row in rows:
+        plan = as_number(row[col_plan]) if len(row) > col_plan else None
+        pct = as_number(row[col_pct]) if col_pct >= 0 and len(row) > col_pct else None
+        if not plan or not pct:
+            continue
+        for col in candidates:
+            fact = as_number(row[col]) if len(row) > col else None
+            if fact and abs(fact / plan * 100 - pct) < 0.5:
+                return col_plan, col, col_pct, name_col
+    raise SourceError("в отчёте не нашлась колонка исполнения")
+
+
 def level_of(row: list[str]) -> int:
     """Уровень строки: наименование сдвигается вправо по вложенности."""
     for i in range(1, min(len(row), 7)):
@@ -202,41 +271,68 @@ def level_of(row: list[str]) -> int:
     return 0
 
 
-def parse_income(rows: list[list[str]]) -> list[dict]:
+# Категории доходов. В отчётах Минфина у них есть код, в областных формах код стоит
+# в другой строке, чем факт, поэтому опознаются они по названию.
+INCOME_CATEGORIES = [
+    ("1", "налоговые поступления"),
+    ("2", "неналоговые поступления"),
+    ("3", "поступления от продажи основного капитала"),
+    ("4", "специальные поступления"),
+    ("5", "поступления трансфертов"),
+]
+
+
+def category_code(name: str) -> str | None:
+    """Код категории доходов по её названию, без учёта регистра и хвостов."""
+    text = " ".join(name.lower().split())
+    for code, title in INCOME_CATEGORIES:
+        if text.startswith(title):
+            return code
+    return None
+
+
+def parse_income(
+    rows: list[list[str]], layout: tuple[int, int, int, int] | None = None
+) -> list[dict]:
     """Категории доходов верхнего уровня: налоги, неналоговые, трансферты и прочее.
 
     Нужны, чтобы показать, на чём держится бюджет уровня: у местных бюджетов
     заметная часть доходов это трансферты из республиканского, и без них картина
     поступлений читается неверно."""
+    col_plan, col_fact, col_pct, name_col = layout or report_layout(rows)
     out: list[dict] = []
+    seen: set[str] = set()
     for row in rows:
-        if len(row) <= COL_FACT:
+        if len(row) <= col_fact:
             continue
-        if level_of(row) != 1:
+        # Наименование сдвигается вправо по уровню вложенности, и у разных форм
+        # категория оказывается в разных колонках между шапкой и плановыми числами.
+        title = next(
+            (
+                row[i]
+                for i in range(name_col, min(col_plan, len(row)))
+                if row[i].strip()
+            ),
+            "",
+        )
+        code = category_code(title)
+        if not code or code in seen:
             continue
-        name = row[1].strip()
-        # Под шапкой идёт строка нумерации колонок: имя там просто цифра.
-        if not name or name.isdigit():
-            continue
-        fact = as_number(row[COL_FACT])
+        fact = as_number(row[col_fact])
         if fact is None:
-            continue  # шапка и подписи колонок: чисел в строке нет
-        code = row[0].strip()
-        # У категорий доходов код это одна цифра, у функциональных групп затрат
-        # ниже по отчёту он двузначный: на них разбор доходов заканчивается.
-        if len(code) != 1 or not code.isdigit():
-            break
-        if any(i["name"] == name for i in out):
-            break  # категории повторяются ниже в других разрезах отчёта
+            continue
+        seen.add(code)
         out.append(
             {
                 "code": code,
-                "name": name,
-                "plan": (as_number(row[COL_PLAN]) or 0) / 1e6,
+                "name": " ".join(title.split()).capitalize(),
+                "plan": (as_number(row[col_plan]) or 0) / 1e6,
                 "fact": fact / 1e6,
-                "pct": as_number(row[COL_PCT]) if len(row) > COL_PCT else None,
+                "pct": as_number(row[col_pct]) if 0 <= col_pct < len(row) else None,
             }
         )
+        if len(out) == len(INCOME_CATEGORIES):
+            break
     return out
 
 
