@@ -284,6 +284,11 @@ def summarize(income: list[dict], name: str, report: dict, slug: str) -> dict:
     # Часть управлений публикует только налоговую часть доходов: тогда это не
     # «доходы региона», и подавать их как доходы нельзя.
     kind = "full" if len(income) >= MIN_CATEGORIES else "taxes"
+    if kind == "taxes":
+        # Показывается налоговая часть, значит и процент должен быть по ней, а не
+        # по случайному набору разобравшихся категорий.
+        plan = sum(i["plan"] for i in income if i["code"] == "1")
+        total = taxes
     return {
         "kind": kind,
         "name": name,
