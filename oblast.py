@@ -65,6 +65,7 @@ REGIONS = [
     ("ulytau-finance", "Улытау"),
     ("zhetysu-finance", "Жетысу"),
     ("astana-karzhy", "Астана"),
+    ("almaty-finance-econom", "Алматы"),
     ("shymkent-karzhy", "Шымкент"),
     ("almobl-karzhy", "Алматинская"),
     # Раздел есть, но документов управление пока не публикует: пусть подхватится
@@ -80,6 +81,7 @@ NOT_REPORT = re.compile(
     r"(гражданск|паспорт|аналитическ|антикоррупц|протокол|кассовом исполнении)",
     re.IGNORECASE,
 )
+PRESENTATION_TITLE = re.compile(r"гражданский\s+бюджет", re.IGNORECASE)
 
 MAX_PAGES = 8
 MIN_INCOME = 5.0  # млрд тенге: меньше бывает только у отчёта одного учреждения
@@ -100,6 +102,18 @@ def parse_period(title: str) -> tuple[int, int] | None:
     """Отчётная дата из заголовка: «на 1 августа 2026» -> покрытый период."""
     if NOT_REPORT.search(title) or not IS_REPORT.search(title):
         return None
+    return date_period(title)
+
+
+def presentation_period(title: str) -> tuple[int, int] | None:
+    """Период презентации «Гражданский бюджет» Алматы."""
+    if not PRESENTATION_TITLE.search(title):
+        return None
+    return date_period(title)
+
+
+def date_period(title: str) -> tuple[int, int] | None:
+    """Период отчёта из даты в заголовке."""
     m = DATE_WORDS.search(title)
     if m:
         month = MONTHS_RU.get(m.group(1).lower())
@@ -126,7 +140,10 @@ def region_reports(slug: str) -> list[dict]:
         if not chunk:
             break
         for row in chunk:
-            period = parse_period(row.get("title") or "")
+            title = row.get("title") or ""
+            period = parse_period(title)
+            if slug == "almaty-finance-econom" and not period:
+                period = presentation_period(title)
             if not period:
                 continue
             files = [f for f in (row.get("full_text") or []) if f.get("document")]
@@ -136,7 +153,7 @@ def region_reports(slug: str) -> list[dict]:
                 "id": row.get("id"),
                 "year": period[0],
                 "months": period[1],
-                "title": (row.get("title") or "").strip(),
+                "title": title.strip(),
                 "published": (row.get("created_date") or "")[:10],
                 # Ссылка на файл берётся из списка: карточка документа у областей
                 # приходит пустой, в отличие от документов Минфина.
@@ -206,6 +223,7 @@ def books(raw: bytes):
 # --- Текстовые отчёты в Word ---------------------------------------------------
 
 WORD_TEXT = re.compile(r"<w:t[^>]*>([^<]*)</w:t>")
+PPTX_TEXT = re.compile(r"<a:t[^>]*>([^<]*)</a:t>")
 # Форматирование рвёт числа пробелами: «7 25 , 6» это 725,6, а «202 6» это 2026.
 GLUED = re.compile(r"(?<=\d)\s+(?=[\d,])|(?<=,)\s+(?=\d)")
 
@@ -224,6 +242,13 @@ OWN_PATTERN = re.compile(
     + BILLIONS,
     re.IGNORECASE | re.DOTALL,
 )
+PRESENTATION_NUMBER = r"([\d\s]+(?:[.,]\s*\d+)?)"
+PRESENTATION_INCOME = re.compile(PRESENTATION_NUMBER + r"\s+ДОХОДЫ\b", re.IGNORECASE)
+PRESENTATION_TAXES = re.compile(
+    r"Налоговые\s+поступления\s+" + PRESENTATION_NUMBER, re.IGNORECASE
+)
+PRESENTATION_TRANSFERS = re.compile(r"Трансферты\s+" + PRESENTATION_NUMBER, re.IGNORECASE)
+PRESENTATION_MILLIONS = re.compile(r"МЛН\.?\s*ТЕНГЕ", re.IGNORECASE)
 
 
 def word_text(raw: bytes) -> str:
@@ -260,6 +285,51 @@ def parse_word_report(raw: bytes) -> dict | None:
         "plan": round(plan, 2),
         "taxes": round(own_fact, 2) if own_fact and own_fact <= fact else None,
     }
+
+
+def parse_pptx_report(raw: bytes) -> dict | None:
+    """Доходы Алматы из презентации «Гражданский бюджет».
+
+    Управление публикует таблицу доходов только в PPTX. Берутся три явно
+    подписанные величины, без попытки читать диаграммы или расходы.
+    """
+    try:
+        archive = zipfile.ZipFile(io.BytesIO(raw))
+        slides = [name for name in archive.namelist() if name.startswith("ppt/slides/")]
+    except zipfile.BadZipFile:
+        return None
+    for name in slides:
+        text = " ".join(PPTX_TEXT.findall(archive.read(name).decode("utf-8", "ignore")))
+        if (
+            "СТРУКТУРА ПОСТУПЛЕНИЙ" not in text.upper()
+            or not PRESENTATION_MILLIONS.search(text)
+        ):
+            continue
+        income = PRESENTATION_INCOME.search(text)
+        taxes = PRESENTATION_TAXES.search(text)
+        transfers = PRESENTATION_TRANSFERS.search(text)
+        if not income or not taxes or not transfers:
+            continue
+        total = as_number(GLUED.sub("", income.group(1)))
+        tax_total = as_number(GLUED.sub("", taxes.group(1)))
+        transfer_total = as_number(GLUED.sub("", transfers.group(1)))
+        if (
+            not total
+            or not tax_total
+            or transfer_total is None
+            or total < MIN_INCOME
+            or tax_total + transfer_total > total * 1.001
+        ):
+            continue
+        return {
+            "kind": "full",
+            "total": round(total / 1000, 2),
+            "plan": None,
+            "taxes": round(tax_total / 1000, 2),
+            "transfers": round(transfer_total / 1000, 2),
+            "pct": None,
+        }
+    return None
 
 
 def read_income(book) -> list[dict] | None:
@@ -360,6 +430,15 @@ def fetch_region(slug: str, name: str) -> dict:
             continue
         if brief:
             return {**summarize([], name, report, slug), **brief, "income": []}
+    for report in fresh:
+        if slug != "almaty-finance-econom":
+            continue
+        try:
+            presentation = parse_pptx_report(download(slug, report))
+        except (SourceError, OSError):
+            continue
+        if presentation:
+            return {**summarize([], name, report, slug), **presentation, "income": []}
     raise SourceError("ни один из документов не удалось разобрать")
 
 

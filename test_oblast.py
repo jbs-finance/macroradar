@@ -7,7 +7,7 @@ import pytest
 import xls
 from minfin import category_code, parse_income, report_layout
 from minfin_block import oblast_section, plural
-from oblast import parse_period, summarize, too_old
+from oblast import REGIONS, parse_period, summarize, too_old
 
 
 def record(code: int, body: bytes) -> bytes:
@@ -148,6 +148,14 @@ def test_category_code_ignores_unrelated_rows():
 # --- Сбор по регионам ----------------------------------------------------------
 
 
+def test_regions_cover_all_administrative_units():
+    """Три города республиканского значения не должны выпадать из обхода."""
+    assert len(REGIONS) == 20
+    cities = {name for _, name in REGIONS}
+    assert {"Астана", "Алматы", "Шымкент"} <= cities
+    assert ("almaty-finance-econom", "Алматы") in REGIONS
+
+
 def test_parse_period_reads_both_date_styles():
     assert parse_period(
         "Отчет об исполнении бюджета области на 1 августа 2026 года"
@@ -166,6 +174,12 @@ def test_parse_period_january_covers_previous_year():
         2025,
         12,
     )
+
+
+def test_presentation_period_allows_almaty_civic_budget():
+    from oblast import presentation_period
+
+    assert presentation_period("Гражданский бюджет на 1 августа 2026 года") == (2026, 7)
 
 
 def test_too_old_cuts_stale_reports():
@@ -291,6 +305,18 @@ def word_document(text: str) -> bytes:
     return buffer.getvalue()
 
 
+def presentation_document(text: str) -> bytes:
+    """Минимальная презентация с текстом слайда."""
+    import io
+    import zipfile
+
+    body = "".join(f"<a:t>{part}</a:t>" for part in text.split("|"))
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("ppt/slides/slide1.xml", f"<p:sld>{body}</p:sld>")
+    return buffer.getvalue()
+
+
 def test_word_text_repairs_split_numbers():
     """Форматирование рвёт числа: «7 25 , 6» это 725,6, а «202 6» это 2026."""
     from oblast import word_text
@@ -319,6 +345,34 @@ def test_parse_word_report_ignores_other_text():
     from oblast import parse_word_report
 
     assert parse_word_report(word_document("Протокол собрания без цифр")) is None
+
+
+def test_parse_pptx_report_reads_almaty_income_structure():
+    from oblast import parse_pptx_report
+
+    text = (
+        "СТРУКТУРА ПОСТУПЛЕНИЙ|1 232 429,6 ДОХОДЫ|"
+        "МЛН. ТЕНГЕ|Налоговые поступления 1 140 889,8|Трансферты 19 372,2"
+    )
+    parsed = parse_pptx_report(presentation_document(text))
+    assert parsed == {
+        "kind": "full",
+        "total": pytest.approx(1232.43),
+        "plan": None,
+        "taxes": pytest.approx(1140.89),
+        "transfers": pytest.approx(19.37),
+        "pct": None,
+    }
+
+
+def test_parse_pptx_report_requires_millions_unit():
+    from oblast import parse_pptx_report
+
+    text = (
+        "СТРУКТУРА ПОСТУПЛЕНИЙ|1 232 429,6 ДОХОДЫ|"
+        "Налоговые поступления 1 140 889,8|Трансферты 19 372,2"
+    )
+    assert parse_pptx_report(presentation_document(text)) is None
 
 
 def test_parse_word_report_rejects_implausible_ratio():
