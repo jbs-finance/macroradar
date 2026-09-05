@@ -37,7 +37,7 @@ HUB_STYLE = """
 .analysis-section { padding-block: clamp(3rem, 8vw, 6rem); border-top: 1px solid var(--muted); }
 .tab-state { position: fixed; opacity: 0; pointer-events: none; }
 .tab-panel { display: none; }
-#view-hub:checked ~ .wrap .panel-hub, #view-macro:checked ~ .wrap .panel-macro, #view-trade:checked ~ .wrap .panel-trade, #view-fund:checked ~ .wrap .panel-national-fund, #view-budget:checked ~ .wrap .panel-budget, #view-tax:checked ~ .wrap .panel-tax { display: block; }
+#view-hub:checked ~ .wrap .panel-hub, #view-macro:checked ~ .wrap .panel-macro, #view-trade:checked ~ .wrap .panel-trade, #view-fund:checked ~ .wrap .panel-national-fund, #view-budget:checked ~ .wrap .panel-budget, #view-tax:checked ~ .wrap .panel-tax, body:has(#view-hub:checked) .panel-hub, body:has(#view-macro:checked) .panel-macro, body:has(#view-trade:checked) .panel-trade, body:has(#view-fund:checked) .panel-national-fund, body:has(#view-budget:checked) .panel-budget, body:has(#view-tax:checked) .panel-tax { display: block !important; }
 #view-hub:checked ~ .tabs label[for="view-hub"], #view-macro:checked ~ .tabs label[for="view-macro"], #view-trade:checked ~ .tabs label[for="view-trade"], #view-fund:checked ~ .tabs label[for="view-fund"], #view-budget:checked ~ .tabs label[for="view-budget"], #view-tax:checked ~ .tabs label[for="view-tax"] { color: var(--fg); border-bottom-color: var(--accent); }
 .radar-card { cursor: pointer; }
 .inline-tab-link { color: var(--accent); cursor: pointer; text-decoration: underline; }
