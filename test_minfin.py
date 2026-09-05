@@ -331,12 +331,12 @@ def test_spark_survives_short_series():
 
 
 def build_page() -> str:
-    import build_tax
+    import build_budget
 
-    here = Path(__file__).parent
-    data = json.loads((here / "out" / "tax.json").read_text(encoding="utf-8"))
-    budget = json.loads((here / "out" / "budget.json").read_text(encoding="utf-8"))
-    return build_tax.build(data, budget, sample_minfin())
+    budget = json.loads(
+        (Path(__file__).parent / "out" / "budget.json").read_text(encoding="utf-8")
+    )
+    return build_budget.build(sample_with_local(), budget)
 
 
 def test_page_carries_both_sources():

@@ -15,24 +15,12 @@ import sys
 from datetime import date, datetime
 from pathlib import Path
 
-from layout import (
-    CTA_STYLE,
-    HEADER_STYLE,
-    cta_block,
-    dataset_jsonld,
-    meta_tags,
-    site_header,
-)
-from budget_block import BUDGET_STYLE, budget_section
-from compare_block import COMPARE_STYLE
-from minfin_block import LEVELS_STYLE, MINFIN_STYLE, minfin_section
+from layout import CTA_STYLE, HEADER_STYLE, cta_block, meta_tags, site_header
 from build_pulse import STYLE, fmt_date
 
 HERE = Path(__file__).resolve().parent
 DATASET = HERE / "out" / "tax.json"
 DEFAULT_OUT = HERE / "out" / "tax.html"
-BUDGET = HERE / "out" / "budget.json"
-MINFIN = HERE / "out" / "minfin.json"
 
 TAX_STYLE = """
 .tax-group { background: var(--card); border: 1px solid var(--muted); border-radius: var(--radius);
@@ -53,6 +41,10 @@ TAX_STYLE = """
 .tax-base { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
 .tax-base .card { gap: 0.15rem; }
 .tax-base .num { font-size: 1.375rem; }
+.cross { background: var(--muted); border-radius: var(--radius); padding: 0.9rem 1.15rem;
+  margin-block: 1.5rem; font-size: 0.875rem; }
+.cross p { margin: 0; }
+.cross a { color: var(--accent); }
 .disclaimer { background: var(--muted); border-radius: var(--radius); padding: 1rem 1.15rem;
   margin-block: 1.5rem; font-size: 0.875rem; }
 .disclaimer p { margin: 0 0 0.5rem; }
@@ -126,62 +118,20 @@ def simple_table(title: str, items: list[dict], columns: tuple[str, str]) -> str
       </section>"""
 
 
-def budget_jsonld(
-    budget: dict | None, minfin: dict | None, generated: datetime
-) -> str:
-    """Разметка набора данных: без неё поисковик читает страницу как статью."""
-    sources = []
-    parts = []
-    if minfin and minfin.get("latest"):
-        latest = minfin["latest"]
-        sources.append("Министерство финансов РК")
-        parts.append(
-            f"исполнение государственного бюджета за {latest['period']} "
-            "с планом и фактом по видам налогов"
-        )
-    if budget and budget.get("dynamics"):
-        sources.append("Комитет государственных доходов МФ РК")
-        parts.append(
-            f"помесячные поступления по областям за {budget['dynamics']['year']} год"
-        )
-    if not sources:
-        return ""
-    return dataset_jsonld(
-        generated.isoformat(),
-        sources,
-        name="Поступления налогов в бюджет Казахстана",
-        description="Налоговые поступления Казахстана: " + ", ".join(parts) + ".",
-        path="/radar/tax/",
-    )
-
-
-def build(
-    data: dict, budget: dict | None = None, minfin: dict | None = None
-) -> str:
+def build(data: dict) -> str:
     generated = datetime.fromisoformat(data["generated_at"])
-    budget_html, drill_rules = budget_section(budget) if budget else ("", "")
     return TEMPLATE.format(
         meta=meta_tags(
-            'Налоги Казахстана 2026: ставки, пороги и фактические поступления',
-            'Ставки НДС, КПН, ИПН и соцплатежей 2026 с порогами в тенге и сроками '
-            'отчётности, плюс фактические поступления в бюджет по месяцам и регионам '
-            'по данным КГД.',
+            'Налоги Казахстана 2026: ставки, пороги и сроки по Налоговому кодексу',
+            'Ставки НДС, КПН, ИПН, соцплатежей и спецрежимов на 2026 год с порогами '
+            'в тенге и сроками отчётности. Справочник сверен с первоисточниками, '
+            'дата сверки на странице.',
             '/radar/tax/',
         )
-        + budget_jsonld(budget, minfin, generated),
+        ,
         header=site_header('tax'),
         cta=cta_block(),
-        style=STYLE
-        + HEADER_STYLE
-        + CTA_STYLE
-        + TAX_STYLE
-        + BUDGET_STYLE
-        + COMPARE_STYLE
-        + MINFIN_STYLE
-        + LEVELS_STYLE
-        + drill_rules,
-        budget=budget_html,
-        minfin=minfin_section(minfin),
+        style=STYLE + HEADER_STYLE + CTA_STYLE + TAX_STYLE,
         year=data["year"],
         generated_human=generated.strftime("%d.%m.%Y %H:%M UTC"),
         generated_iso=generated.isoformat(),
@@ -227,9 +177,11 @@ TEMPLATE = """<!doctype html>
 {base_cards}
     </div>
 
-{minfin}
-
-{budget}
+    <div class="cross">
+      <p>Сколько этих налогов собрано на самом деле, как исполняется план и кто
+        платит по регионам, показано в
+        <a href="/radar/budget/">дашборде бюджета</a>.</p>
+    </div>
 
     <h2>Ставки</h2>
 {groups}
@@ -281,20 +233,8 @@ def main() -> None:
     out = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_OUT
     dataset = Path(sys.argv[2]) if len(sys.argv) > 2 else DATASET
     data = json.loads(dataset.read_text(encoding="utf-8"))
-    budget_path = Path(sys.argv[3]) if len(sys.argv) > 3 else BUDGET
-    budget = None
-    if budget_path.exists():
-        budget = json.loads(budget_path.read_text(encoding="utf-8"))
-        if not budget.get("dynamics"):
-            budget = None
-    minfin_path = Path(sys.argv[4]) if len(sys.argv) > 4 else MINFIN
-    minfin = None
-    if minfin_path.exists():
-        minfin = json.loads(minfin_path.read_text(encoding="utf-8"))
-        if not minfin.get("latest"):
-            minfin = None
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(build(data, budget, minfin), encoding="utf-8")
+    out.write_text(build(data), encoding="utf-8")
     print(f"Страница собрана: {out} ({out.stat().st_size // 1024} КБ)")
 
 

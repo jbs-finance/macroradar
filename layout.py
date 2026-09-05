@@ -15,7 +15,8 @@ SITE = "https://jbs.finance"
 TABS = [
     ("radar", "Макро", "/radar/"),
     ("trade", "Торговля", "/radar/trade/"),
-    ("tax", "Налоги", "/radar/tax/"),
+    ("budget", "Бюджет", "/radar/budget/"),
+    ("tax", "Ставки", "/radar/tax/"),
 ]
 
 HEADER_STYLE = """

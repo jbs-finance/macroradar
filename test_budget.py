@@ -254,12 +254,9 @@ def test_series_count_matches_tabs():
 
 
 def build_page() -> str:
-    import build_tax
+    import build_budget
 
-    data = json.loads(
-        (Path(__file__).parent / "out" / "tax.json").read_text(encoding="utf-8")
-    )
-    return build_tax.build(data, sample_budget())
+    return build_budget.build(None, sample_budget())
 
 
 def test_page_includes_budget_styles():
@@ -291,10 +288,13 @@ def test_page_declares_dataset():
     assert "Поступления налогов в бюджет Казахстана" in page
 
 
-def test_page_without_budget_has_no_dataset():
+def test_rates_page_has_no_dashboard():
+    """Норма и факт разведены по разным страницам: справочник не тянет данные."""
     import build_tax
 
     data = json.loads(
         (Path(__file__).parent / "out" / "tax.json").read_text(encoding="utf-8")
     )
-    assert "@type" not in build_tax.build(data, None)
+    page = build_tax.build(data)
+    assert "Сколько собирают" not in page and "plan-table" not in page
+    assert "/radar/budget/" in page
