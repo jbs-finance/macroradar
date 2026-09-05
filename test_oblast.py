@@ -236,3 +236,130 @@ def test_plural_declension():
     assert plural(3, "регион", "регионов", "региона") == "3 региона"
     assert plural(6, "регион", "регионов", "региона") == "6 регионов"
     assert plural(11, "регион", "регионов", "региона") == "11 регионов"
+
+
+# --- Формы без процента и текстовые документы ----------------------------------
+
+
+def no_percent_rows() -> list[list[str]]:
+    """Сводка, где рядом стоят прошлые годы, а колонки процента нет."""
+    header = [""] * 8
+    header[0] = "Наименование"
+    header[4] = "План за 2026 г."
+    header[5] = "План на 1.07.2026 г."
+    header[6] = "Исполнение на 1.07.2026 г."
+
+    def row(name, plan, fact):
+        line = [""] * 8
+        line[0] = name
+        line[4] = str(plan * 2e6)
+        line[5] = str(plan * 1e6)
+        line[6] = str(fact * 1e6)
+        return line
+
+    return [
+        ["Исполнение бюджета области"] + [""] * 7,
+        header,
+        row("Поступления в бюджет области, ВСЕГО", 200.0, 190.0),
+        row("Налоговые поступления", 100.0, 96.0),
+        row("Неналоговые поступления", 10.0, 12.0),
+        row("Поступления трансфертов", 90.0, 82.0),
+    ]
+
+
+def test_report_layout_without_percent_column():
+    """Часть управлений печатает план и исполнение без процента исполнения."""
+    layout = report_layout(no_percent_rows())
+    assert layout[0] == 5 and layout[1] == 6 and layout[2] == -1
+
+
+def test_parse_income_reads_form_without_percent():
+    income = parse_income(no_percent_rows())
+    assert [i["code"] for i in income] == ["1", "2", "5"]
+    assert income[0]["fact"] == pytest.approx(96.0)
+
+
+def word_document(text: str) -> bytes:
+    """Минимальный docx с одним абзацем."""
+    import io
+    import zipfile
+
+    body = "".join(f"<w:t>{part}</w:t>" for part in text.split(" "))
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("word/document.xml", f"<w:document><w:p>{body}</w:p></w:document>")
+    return buffer.getvalue()
+
+
+def test_word_text_repairs_split_numbers():
+    """Форматирование рвёт числа: «7 25 , 6» это 725,6, а «202 6» это 2026."""
+    from oblast import word_text
+
+    assert "725,6" in word_text(word_document("объем 7 25 , 6 млрд"))
+    assert "2026" in word_text(word_document("на 1 сентября 202 6 года"))
+
+
+def test_parse_word_report_reads_totals():
+    from oblast import parse_word_report
+
+    text = (
+        "СПРАВКА по исполнению бюджета области При плане на отчетный период "
+        "по поступлениям 522,3 млрд тенге, исполнение составило 540,9 млрд тенге "
+        "или 103,6 % к плану. Собственные доходы при плане на отчетный период "
+        "165,8 млрд тенге исполнены на 1 84 ,2 млрд тенге или 111,1 %."
+    )
+    parsed = parse_word_report(word_document(text))
+    assert parsed["kind"] == "brief"
+    assert parsed["total"] == pytest.approx(540.9)
+    assert parsed["plan"] == pytest.approx(522.3)
+    assert parsed["taxes"] == pytest.approx(184.2)
+
+
+def test_parse_word_report_ignores_other_text():
+    from oblast import parse_word_report
+
+    assert parse_word_report(word_document("Протокол собрания без цифр")) is None
+
+
+def test_parse_word_report_rejects_implausible_ratio():
+    """Если исполнение отличается от плана в разы, это не тот показатель."""
+    from oblast import parse_word_report
+
+    text = (
+        "При плане на отчетный период по поступлениям 10 млрд тенге, "
+        "исполнение составило 900 млрд тенге"
+    )
+    assert parse_word_report(word_document(text)) is None
+
+
+def test_summarize_marks_partial_form():
+    """Если в отчёте только налоги, это не доходы региона."""
+    report = {"year": 2026, "months": 7, "published": "2026-08-11", "id": 1}
+    only_taxes = [{"code": "1", "name": "Налоговые поступления", "plan": 60.0, "fact": 61.0}]
+    summary = summarize(only_taxes, "Жетысу", report, "zhetysu-finance")
+    assert summary["kind"] == "taxes"
+    assert summary["own_share"] is None
+
+
+def test_oblast_row_shapes_by_kind():
+    from minfin_block import oblast_row
+
+    base = {"name": "Тест", "year": 2026, "months": 7, "total": 100.0, "taxes": 60.0,
+            "transfers": 20.0, "pct": 98.0}
+    assert "своих 80%" in oblast_row({**base, "kind": "full"})
+    assert "только налоги" in oblast_row({**base, "kind": "taxes"})
+    assert "своих 60 млрд" in oblast_row({**base, "kind": "brief"})
+
+
+def test_oblast_section_counts_full_forms():
+    data = {
+        "regions": [
+            {"name": "А", "kind": "full", "year": 2026, "months": 7, "total": 100.0,
+             "taxes": 60.0, "transfers": 20.0, "pct": 98.0},
+            {"name": "Б", "kind": "taxes", "year": 2026, "months": 7, "total": 50.0,
+             "taxes": 50.0, "transfers": 0.0, "pct": None},
+        ]
+    }
+    html = oblast_section(data)
+    assert "2 региона из двадцати" in html
+    assert "структурой доходов у 1 региона" in html

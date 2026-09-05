@@ -558,6 +558,16 @@ OBLAST_STYLE = """
   font-size: 0.8125rem; }
 .obl-figures b { display: block; font-size: 0.9375rem; }
 .obl-figures span { color: var(--muted-fg); }
+.obl-mix.partial i.own { background: repeating-linear-gradient(135deg,
+  var(--accent), var(--accent) 5px, #D8C7AE 5px, #D8C7AE 10px); }
+.obl-legend { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 0.6rem 0 0.3rem;
+  font-size: 0.75rem; color: var(--muted-fg); }
+.obl-legend span { display: inline-flex; align-items: center; gap: 0.3rem; }
+.obl-legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+.obl-legend i.own { background: var(--accent); }
+.obl-legend i.transfer { background: #8C7B6B; }
+.obl-legend i.partial { background: repeating-linear-gradient(135deg,
+  var(--accent), var(--accent) 3px, #D8C7AE 3px, #D8C7AE 6px); }
 .obl-note { font-size: 0.8125rem; color: var(--muted-fg); }
 
 @media (max-width: 40rem) {
@@ -585,6 +595,52 @@ def plural(count: int, one: str, many: str, few: str) -> str:
     return f"{count} {word}"
 
 
+def oblast_row(region: dict) -> str:
+    """Строка региона. Полнота отчётов разная, поэтому и подпись разная.
+
+    Полная форма даёт структуру доходов, у части управлений публикуется только
+    налоговая часть, а у части вообще текстовая справка с двумя числами. Выдавать
+    их за одно и то же нельзя: полоса рисуется только там, где известны обе доли."""
+    kind = region.get("kind", "full")
+    period = period_label(region["year"], region["months"])
+    stale = " · прошлый сбор" if region.get("stale") else ""
+    total = region["total"] or 1
+    pct = region.get("pct")
+    plan_note = f", план {fmt_num(pct, 0)}%" if pct else ""
+
+    if kind == "full":
+        own = max(total - region["transfers"], 0)
+        own_share = own / total * 100
+        middle = (
+            f'<span class="obl-mix">'
+            f'<i class="own" style="width: {own_share:.1f}%"></i>'
+            f'<i class="transfer" style="width: {100 - own_share:.1f}%; '
+            f'animation-delay: 0.08s"></i></span>'
+        )
+        figures = (
+            f'<b>{fmt_num(region["total"], 0)} млрд</b>'
+            f'<span>своих {fmt_num(own_share, 0)}%{plan_note}</span>'
+        )
+    elif kind == "taxes":
+        middle = '<span class="obl-mix partial"><i class="own" style="width: 100%"></i></span>'
+        figures = (
+            f'<b>{fmt_num(region["taxes"], 0)} млрд</b>'
+            f"<span>только налоги{plan_note}</span>"
+        )
+    else:
+        middle = '<span class="obl-mix partial"><i class="own" style="width: 100%"></i></span>'
+        own = region.get("taxes")
+        note = f"своих {fmt_num(own, 0)} млрд" if own else "справкой, без разреза"
+        figures = f'<b>{fmt_num(region["total"], 0)} млрд</b><span>{note}{plan_note}</span>'
+
+    return (
+        f'<div class="obl-row">'
+        f'<span class="obl-name">{html.escape(region["name"])}'
+        f"<span>{period}{stale}</span></span>"
+        f'{middle}<span class="obl-figures">{figures}</span></div>'
+    )
+
+
 def oblast_section(data: dict | None) -> str:
     """Свежие отчёты областей: у каждой свой период, поэтому это список, а не рейтинг.
 
@@ -595,40 +651,22 @@ def oblast_section(data: dict | None) -> str:
     regions = (data or {}).get("regions") or []
     if not regions:
         return ""
-    rows = []
-    for region in regions:
-        total = region["total"] or 1
-        own = max(total - region["transfers"], 0)
-        own_share = own / total * 100
-        period = period_label(region["year"], region["months"])
-        pct = region.get("pct")
-        rows.append(
-            f'<div class="obl-row">'
-            f'<span class="obl-name">{html.escape(region["name"])}'
-            f"<span>{period}{' · данные прошлого сбора' if region.get('stale') else ''}"
-            f"</span></span>"
-            f'<span class="obl-mix">'
-            f'<i class="own" style="width: {own_share:.1f}%"></i>'
-            f'<i class="transfer" style="width: {100 - own_share:.1f}%; '
-            f'animation-delay: 0.08s"></i></span>'
-            f'<span class="obl-figures"><b>{fmt_num(region["total"], 0)} млрд</b>'
-            f'<span>своих {fmt_num(own_share, 0)}%'
-            f'{f", план {fmt_num(pct, 0)}%" if pct else ""}</span></span>'
-            f"</div>"
-        )
-    note = (
-        f'<p class="obl-note">Машиночитаемый свежий отчёт нашёлся у '
-        f"{plural(len(regions), 'региона', 'регионов', 'региона')} из двадцати. "
-        "Остальные выкладывают документ Word, форму без плановых колонок или "
-        "отстают на годы: их цифры сюда не попадают, чтобы не смешивать периоды.</p>"
-    )
+    full = sum(1 for r in regions if r.get("kind", "full") == "full")
     return "\n".join(
         [
             "<h3>Свежие отчёты областей</h3>",
             '<p class="lede">Каждое областное управление финансов публикует своё '
             "исполнение бюджета отдельно и в свой срок. Полоса показывает, какую долю "
             "доходов регион собирает сам, а какую получает трансфертами.</p>",
-            f'<div class="obl">{"".join(rows)}</div>',
-            note,
+            f'<div class="obl">{"".join(oblast_row(r) for r in regions)}</div>',
+            '<p class="obl-legend"><span><i class="own"></i>свои доходы</span>'
+            '<span><i class="transfer"></i>трансферты</span>'
+            '<span><i class="partial"></i>разрез не опубликован</span></p>',
+            f'<p class="obl-note">Отчёт нашёлся у '
+            f"{plural(len(regions), 'региона', 'регионов', 'региона')} из двадцати, "
+            f"со структурой доходов у {plural(full, 'региона', 'регионов', 'региона')}. "
+            "Остальные публикуют форму без доходной части, презентацию для граждан "
+            "или отстают на годы: их цифры сюда не попадают, чтобы не смешивать "
+            "периоды и разные показатели.</p>",
         ]
     )

@@ -33,6 +33,8 @@ from pathlib import Path
 from budget import SourceError, as_number
 from budget import Workbook as XlsxBook
 from minfin import MONTHS_RU, parse_income, report_layout
+from struct import error as struct_error
+
 from xls import Workbook as XlsBook
 from xls import XlsError
 
@@ -64,6 +66,10 @@ REGIONS = [
     ("zhetysu-finance", "Жетысу"),
     ("astana-karzhy", "Астана"),
     ("shymkent-karzhy", "Шымкент"),
+    ("almobl-karzhy", "Алматинская"),
+    # Раздел есть, но документов управление пока не публикует: пусть подхватится
+    # само, когда появятся.
+    ("kyzylorda-karzhy", "Кызылординская"),
 ]
 
 # «на 1 августа 2026 года» и «на 01.08.2026г.» встречаются одинаково часто.
@@ -79,6 +85,7 @@ MAX_PAGES = 8
 MIN_INCOME = 5.0  # млрд тенге: меньше бывает только у отчёта одного учреждения
 MIN_CATEGORIES = 3  # разобрана хотя бы половина категорий доходов
 MAX_AGE_MONTHS = 18  # отчёт старше полутора лет уже не «свежая картина»
+MAX_CANDIDATES = 6  # сколько документов региона пробовать, прежде чем сдаться
 
 
 def api_json(url: str, timeout: int = 45):
@@ -108,9 +115,12 @@ def parse_period(title: str) -> tuple[int, int] | None:
     return (year - 1, 12) if month == 1 else (year, month - 1)
 
 
-def latest_report(slug: str) -> dict:
-    """Свежий отчёт региона: карточка документа с периодом."""
-    best: dict | None = None
+def region_reports(slug: str) -> list[dict]:
+    """Отчёты региона со свежих, по одному на период.
+
+    Перебор нужен потому, что в один месяц управление выкладывает и таблицу, и
+    текстовую справку, и презентацию: разобрать удаётся не первое попавшееся."""
+    found: list[dict] = []
     for page in range(MAX_PAGES):
         chunk = api_json(f"{API}?projects={slug}&size=100&page={page}")
         if not chunk:
@@ -132,21 +142,20 @@ def latest_report(slug: str) -> dict:
                 # приходит пустой, в отличие от документов Минфина.
                 "document": files[0]["document"],
             }
-            if best is None or (candidate["year"], candidate["months"]) > (
-                best["year"],
-                best["months"],
-            ):
-                best = candidate
+            found.append(candidate)
         if len(chunk) < 100:
             break
-    if best is None:
+    if not found:
         raise SourceError("нет отчётов об исполнении бюджета")
-    return best
+    found.sort(key=lambda c: (c["year"], c["months"], c["published"]), reverse=True)
+    return found[:MAX_CANDIDATES]
 
 
 def download(slug: str, report: dict) -> bytes:
     RAW.mkdir(parents=True, exist_ok=True)
-    path = RAW / f"oblast_{slug}_{report['year']}_{report['months']:02d}.bin"
+    # В имени нужен идентификатор документа: за один месяц управление выкладывает
+    # и таблицу, и справку, и презентацию, а кэш по месяцу оставлял только первую.
+    path = RAW / f"oblast_{slug}_{report['year']}_{report['months']:02d}_{report['id']}.bin"
     if path.exists() and path.stat().st_size > 3000:
         return path.read_bytes()
     result = subprocess.run(
@@ -168,24 +177,89 @@ def download(slug: str, report: dict) -> bytes:
 
 def books(raw: bytes):
     """Книги внутри вложения: файл может быть архивом, xls или xlsx."""
-    if raw[:2] == b"PK" and b"xl/workbook.xml" not in raw[:4000]:
+    if raw[:2] == b"PK":
         try:
             archive = zipfile.ZipFile(io.BytesIO(raw))
+            names = archive.namelist()
         except zipfile.BadZipFile:
             return
+        # Книгу от простого архива отличает содержимое, а не первые байты: у части
+        # файлов запись xl/workbook.xml лежит дальше начала, и они уходили в разбор
+        # как архив, теряясь целиком.
+        if "xl/workbook.xml" in names:
+            try:
+                yield XlsxBook(raw)
+            except (SourceError, KeyError, ValueError, zipfile.BadZipFile):
+                pass
+            return
         for info in archive.infolist():
-            if not info.file_size:
-                continue
-            inner = archive.read(info.filename)
-            yield from books(inner)
+            if info.file_size:
+                yield from books(archive.read(info.filename))
         return
-    try:
-        if raw[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1":
+    if raw[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1":
+        try:
             yield XlsBook(raw)
-        elif raw[:2] == b"PK":
-            yield XlsxBook(raw)
-    except (XlsError, SourceError, KeyError, ValueError, zipfile.BadZipFile):
-        return
+        except (XlsError, KeyError, ValueError, struct_error):
+            return
+
+
+# --- Текстовые отчёты в Word ---------------------------------------------------
+
+WORD_TEXT = re.compile(r"<w:t[^>]*>([^<]*)</w:t>")
+# Форматирование рвёт числа пробелами: «7 25 , 6» это 725,6, а «202 6» это 2026.
+GLUED = re.compile(r"(?<=\d)\s+(?=[\d,])|(?<=,)\s+(?=\d)")
+
+BILLIONS = r"([\d]+(?:[.,]\d+)?)\s*млрд"
+TOTAL_PATTERN = re.compile(
+    r"плане на отчетный период по поступлениям\s*"
+    + BILLIONS
+    + r".{0,80}?исполнение составило\s*"
+    + BILLIONS,
+    re.IGNORECASE | re.DOTALL,
+)
+OWN_PATTERN = re.compile(
+    r"собственные доходы при плане на отчетный период\s*"
+    + BILLIONS
+    + r".{0,80}?исполнены на\s*"
+    + BILLIONS,
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def word_text(raw: bytes) -> str:
+    """Плоский текст документа Word с починенными числами."""
+    try:
+        document = zipfile.ZipFile(io.BytesIO(raw)).read("word/document.xml")
+    except (zipfile.BadZipFile, KeyError):
+        return ""
+    plain = " ".join(WORD_TEXT.findall(document.decode("utf-8", "ignore")))
+    return GLUED.sub("", " ".join(plain.split()))
+
+
+def parse_word_report(raw: bytes) -> dict | None:
+    """Часть управлений публикует исполнение бюджета прозой, без таблиц.
+
+    Берутся всего две величины, зато проверяемые: поступления всего и собственные
+    доходы, каждая со своим планом. Если формулировка поменяется, разбор просто
+    ничего не найдёт, и регион выпадет из списка вместо того, чтобы показать чушь."""
+    text = word_text(raw)
+    if not text:
+        return None
+    total = TOTAL_PATTERN.search(text)
+    if not total:
+        return None
+    plan = as_number(total.group(1))
+    fact = as_number(total.group(2))
+    if not plan or not fact or not 0.3 < fact / plan < 3:
+        return None
+    own = OWN_PATTERN.search(text)
+    own_fact = as_number(own.group(2)) if own else None
+    return {
+        "kind": "brief",
+        "total": round(fact, 2),
+        "plan": round(plan, 2),
+        "taxes": round(own_fact, 2) if own_fact and own_fact <= fact else None,
+    }
 
 
 def read_income(book) -> list[dict] | None:
@@ -203,10 +277,15 @@ def read_income(book) -> list[dict] | None:
 
 def summarize(income: list[dict], name: str, report: dict, slug: str) -> dict:
     total = sum(i["fact"] for i in income)
+    income = income or []
     taxes = sum(i["fact"] for i in income if i["code"] == "1")
     transfers = sum(i["fact"] for i in income if "рансферт" in i["name"])
     plan = sum(i["plan"] for i in income)
+    # Часть управлений публикует только налоговую часть доходов: тогда это не
+    # «доходы региона», и подавать их как доходы нельзя.
+    kind = "full" if len(income) >= MIN_CATEGORIES else "taxes"
     return {
+        "kind": kind,
         "name": name,
         "slug": slug,
         "period": f"{report['year']}-{report['months']:02d}",
@@ -219,7 +298,11 @@ def summarize(income: list[dict], name: str, report: dict, slug: str) -> dict:
         "plan": round(plan, 2),
         "taxes": round(taxes, 2),
         "transfers": round(transfers, 2),
-        "own_share": round((total - transfers) / total * 100, 1) if total else None,
+        "own_share": (
+            round((total - transfers) / total * 100, 1)
+            if total and kind == "full"
+            else None
+        ),
         "pct": round(total / plan * 100, 1) if plan else None,
     }
 
@@ -230,12 +313,8 @@ def too_old(year: int, months: int) -> bool:
     return age > MAX_AGE_MONTHS
 
 
-def fetch_region(slug: str, name: str) -> dict:
-    report = latest_report(slug)
-    if too_old(report["year"], report["months"]):
-        raise SourceError(
-            f"свежих отчётов нет, последний за {report['year']}-{report['months']:02d}"
-        )
+def read_report(slug: str, report: dict, name: str) -> dict | None:
+    """Разбор одного документа: None, если форма не та."""
     raw = download(slug, report)
     best: dict | None = None
     for book in books(raw):
@@ -243,19 +322,40 @@ def fetch_region(slug: str, name: str) -> dict:
         if not income:
             continue
         summary = summarize(income, name, report, slug)
-        # Форма могла разобраться наполовину: без налогов или с одной категорией
-        # цифры выглядят правдоподобно, но врут.
-        if len(income) < MIN_CATEGORIES or summary["total"] < MIN_INCOME:
+        if summary["total"] < MIN_INCOME or not summary["taxes"]:
             continue
-        if not summary["taxes"] or summary["taxes"] > summary["total"]:
+        if summary["taxes"] > summary["total"] * 1.001:
             continue
         # В архиве лежит и бюджет области целиком, и отдельно областной без районов.
         # Нужен первый: он больше.
         if best is None or summary["total"] > best["total"]:
             best = summary
-    if best is None:
-        raise SourceError("в файле нет разбираемого отчёта об исполнении")
     return best
+
+
+def fetch_region(slug: str, name: str) -> dict:
+    candidates = region_reports(slug)
+    fresh = [c for c in candidates if not too_old(c["year"], c["months"])]
+    if not fresh:
+        newest = candidates[0]
+        raise SourceError(
+            f"свежих отчётов нет, последний за {newest['year']}-{newest['months']:02d}"
+        )
+    for report in fresh:
+        try:
+            summary = read_report(slug, report, name)
+        except (SourceError, OSError):
+            continue
+        if summary:
+            return summary
+    for report in fresh:
+        try:
+            brief = parse_word_report(download(slug, report))
+        except (SourceError, OSError):
+            continue
+        if brief:
+            return {**summarize([], name, report, slug), **brief, "income": []}
+    raise SourceError("ни один из документов не удалось разобрать")
 
 
 def build() -> dict:

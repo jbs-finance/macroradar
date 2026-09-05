@@ -247,9 +247,7 @@ def report_layout(rows: list[list[str]]) -> tuple[int, int, int, int]:
 
     # Первая колонка правее плана, где число сходится с процентом исполнения.
     candidates = [
-        i
-        for i in range(col_plan + 1, len(header) + 6)
-        if col_pct < 0 or i != col_pct
+        i for i in range(col_plan + 1, len(header) + 6) if col_pct < 0 or i != col_pct
     ]
     for row in rows:
         plan = as_number(row[col_plan]) if len(row) > col_plan else None
@@ -260,6 +258,22 @@ def report_layout(rows: list[list[str]]) -> tuple[int, int, int, int]:
             fact = as_number(row[col]) if len(row) > col else None
             if fact and abs(fact / plan * 100 - pct) < 0.5:
                 return col_plan, col, col_pct, name_col
+
+    # Формы, где процента нет вовсе: колонка исполнения подписана в шапке, а
+    # правдоподобие проверяется отношением факта к плану на нескольких строках.
+    named = next(
+        (i for i, c in enumerate(header) if i > col_plan and "исполнени" in c.lower()),
+        -1,
+    )
+    if named >= 0:
+        checked = 0
+        for row in rows:
+            plan = as_number(row[col_plan]) if len(row) > col_plan else None
+            fact = as_number(row[named]) if len(row) > named else None
+            if plan and fact and 0.2 < fact / plan < 2.0:
+                checked += 1
+            if checked >= 3:
+                return col_plan, named, -1, name_col
     raise SourceError("в отчёте не нашлась колонка исполнения")
 
 
@@ -430,7 +444,9 @@ def collect(kind: str, issues: list[str]) -> tuple[dict | None, list[dict]]:
         try:
             parsed = parse_report(fetch_report(report))
         except (SourceError, OSError) as exc:
-            issues.append(f"отчёт {kind} {report['year']}-{report['months']:02d}: {exc}")
+            issues.append(
+                f"отчёт {kind} {report['year']}-{report['months']:02d}: {exc}"
+            )
             continue
         history.append(
             {**report, "fact": parsed["total"]["fact"], "plan": parsed["total"]["plan"]}
@@ -505,9 +521,7 @@ def main() -> None:
         )
     if data["local"]:
         local = data["local"]
-        transfers = next(
-            (i for i in local["income"] if "рансферт" in i["name"]), None
-        )
+        transfers = next((i for i in local["income"] if "рансферт" in i["name"]), None)
         income = sum(i["fact"] for i in local["income"]) or 1
         print(
             f"местные бюджеты: {local['period']}, налоги {local['total']['fact']:.0f} млрд, "
