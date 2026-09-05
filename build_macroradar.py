@@ -37,7 +37,7 @@ HUB_STYLE = """
 .analysis-section { padding-block: clamp(3rem, 8vw, 6rem); border-top: 1px solid var(--muted); }
 .tab-state { position: fixed; opacity: 0; pointer-events: none; }
 .tab-panel { display: none; }
-#view-hub:checked ~ main .panel-hub, #view-macro:checked ~ main .panel-macro, #view-trade:checked ~ main .panel-trade, #view-fund:checked ~ main .panel-national-fund, #view-budget:checked ~ main .panel-budget, #view-tax:checked ~ main .panel-tax { display: block !important; }
+#view-hub:checked ~ .panel-hub, #view-macro:checked ~ .panel-macro, #view-trade:checked ~ .panel-trade, #view-fund:checked ~ .panel-national-fund, #view-budget:checked ~ .panel-budget, #view-tax:checked ~ .panel-tax { display: block !important; }
 #view-hub:checked ~ .tabs label[for="view-hub"], #view-macro:checked ~ .tabs label[for="view-macro"], #view-trade:checked ~ .tabs label[for="view-trade"], #view-fund:checked ~ .tabs label[for="view-fund"], #view-budget:checked ~ .tabs label[for="view-budget"], #view-tax:checked ~ .tabs label[for="view-tax"] { color: var(--fg); border-bottom-color: var(--accent); }
 .radar-card { cursor: pointer; }
 .inline-tab-link { color: var(--accent); cursor: pointer; text-decoration: underline; }
@@ -102,7 +102,7 @@ TEMPLATE = """<!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'none'; img-src 'self' https://jbs.finance; font-src 'self'; base-uri 'none'; form-action 'none'">
 {meta}<title>Macro Radar Казахстана</title><style>{style}</style></head><body>
-{header}<div class="wrap"><input class="tab-state" type="radio" name="radar-view" id="view-hub" checked><input class="tab-state" type="radio" name="radar-view" id="view-macro"><input class="tab-state" type="radio" name="radar-view" id="view-trade"><input class="tab-state" type="radio" name="radar-view" id="view-fund"><input class="tab-state" type="radio" name="radar-view" id="view-budget"><input class="tab-state" type="radio" name="radar-view" id="view-tax"><main>
+{header}<div class="wrap"><main><input class="tab-state" type="radio" name="radar-view" id="view-hub" checked><input class="tab-state" type="radio" name="radar-view" id="view-macro"><input class="tab-state" type="radio" name="radar-view" id="view-trade"><input class="tab-state" type="radio" name="radar-view" id="view-fund"><input class="tab-state" type="radio" name="radar-view" id="view-budget"><input class="tab-state" type="radio" name="radar-view" id="view-tax">
 <section class="tab-panel panel-hub">
 <header id="overview" class="radar-hero"><p class="eyebrow">JB Solutions</p><h1>Macro Radar Казахстана</h1><p class="lede">Пять срезов экономики на одной странице: от макроусловий и торговли до Нацфонда, бюджета и налогов.</p></header>
 <p class="reading-note">Выбери анализ плиткой или вкладкой выше. У каждого показателя указаны дата и первоисточник. Это ориентир для анализа, не персональная инвестиционная или налоговая рекомендация.</p>
