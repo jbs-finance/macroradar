@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 
 from build_macroradar import build
+from page_check import problems
 
 
 HERE = Path(__file__).resolve().parent
@@ -54,3 +55,9 @@ def test_root_is_self_contained_and_csp_prohibits_executable_scripts():
     assert "script-src 'none'" in document
     assert re.findall(r"<script[^>]*>", document) == ['<script type="application/ld+json">']
     assert "onclick=" not in document
+
+
+def test_every_tab_panel_is_reachable_from_its_radio():
+    """Соседский селектор молчит, когда панель уезжает из соседей радиокнопки:
+    вкладка открывается пустой, а проверки по наличию идентификаторов зелёные."""
+    assert problems(page()) == []
