@@ -423,7 +423,7 @@ TEMPLATE = """<!doctype html>
 {fx_cards}
     </div>
 
-    <h2 class="section" id="macro">Экономика</h2>
+    <h2 class="section" id="macro-economy">Экономика</h2>
     <div class="grid">
 {macro_cards}
     </div>

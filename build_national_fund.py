@@ -43,8 +43,26 @@ FUND_STYLE = """
 .year-table th:first-child, .year-table td:first-child { padding-left: 0; text-align: left; }
 .year-table th { color: var(--muted-fg); font-size: 0.78rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
 .year-table .negative { color: #A8522F; } .year-table .positive { color: #2F6B4F; }
+.portfolio { margin: 3rem 0; padding: clamp(1.15rem, 3vw, 2rem); background: var(--card); border: 1px solid var(--muted); }
+.portfolio h2 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: clamp(1.55rem, 3vw, 2.15rem); letter-spacing: -0.025em; }
+.portfolio-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; margin-top: 1.25rem; }
+.portfolio-item { display: grid; grid-template-columns: 1fr auto; gap: 0.35rem 0.75rem; padding: 0.75rem 0; border-bottom: 1px solid var(--muted); }
+.portfolio-item .share { font-family: Georgia, "Times New Roman", serif; font-size: 1.35rem; }
+.portfolio-item .amount { color: var(--muted-fg); font-size: 0.82rem; }
+@media (max-width: 640px) { .portfolio-grid { grid-template-columns: 1fr; } }
 @media (max-width: 640px) { .fund-summary, .availability { grid-template-columns: 1fr; } .fund-chart { margin-inline: -0.35rem; } }
 """
+
+PORTFOLIO_SOURCE = "https://nationalbank.kz/file/download/114770"
+PORTFOLIO_AS_OF = "01.01.2025"
+SAVINGS_PORTFOLIO = [
+    ("Акции", 36.3, 20.3456),
+    ("Облигации развитых стран", 26.9, 15.0967),
+    ("Облигации развивающихся стран", 18.9, 10.5793),
+    ("Корпоративные облигации", 9.2, 5.1316),
+    ("Золото", 5.9, 3.3145),
+    ("Альтернативные инструменты", 2.8, 1.5861),
+]
 
 
 def annual_assets(points: list[dict]) -> list[dict]:
@@ -97,6 +115,13 @@ def table_rows(assets: list[dict], returns: list[dict]) -> str:
     return "\n".join(rows)
 
 
+def portfolio_rows() -> str:
+    return "\n".join(
+        f'<div class="portfolio-item"><span>{html.escape(name)}</span><span class="share">{fmt_num(share, 1)}%</span><span class="amount">{fmt_num(value, 2)} млрд USD</span></div>'
+        for name, share, value in SAVINGS_PORTFOLIO
+    )
+
+
 def build(data: dict) -> str:
     assets = data["assets"]
     returns = data["returns"]
@@ -130,6 +155,9 @@ def build(data: dict) -> str:
         return_start=html.escape(returns[0]["date"]),
         return_end=html.escape(returns[-1]["date"]),
         rows=table_rows(assets, returns),
+        portfolio_rows=portfolio_rows(),
+        portfolio_source=PORTFOLIO_SOURCE,
+        portfolio_as_of=PORTFOLIO_AS_OF,
         asset_source=html.escape(data["assets_source"], quote=True),
         return_source=html.escape(data["returns_source"], quote=True),
         issue_block=issue_block,
@@ -177,6 +205,13 @@ TEMPLATE = """<!doctype html>
         <div><dt>Доходность: доступна</dt><dd>НБРК обновляет годовую таблицу. В радаре {return_count} за {return_start}-{return_end} годы.</dd></div>
         <div><dt>Операции и трансферты: пока не включены</dt><dd>НБРК публикует свежие операции ежемесячно, но нет единого машиночитаемого ряда на 10 лет. Сводить архивные таблицы без отдельной сверки было бы недостоверно.</dd></div>
       </dl>
+    </section>
+
+    <section class="portfolio" aria-labelledby="portfolio-title">
+      <h2 id="portfolio-title">Состав сберегательного портфеля</h2>
+      <p class="section-note">Последнее полное годовое раскрытие НБРК, на {portfolio_as_of}. Это доли внутри сберегательного портфеля 56,05 млрд USD, не доли всего Нацфонда на текущую дату.</p>
+      <div class="portfolio-grid">{portfolio_rows}</div>
+      <p class="section-note">Отдельно НБРК раскрыл стабилизационный портфель: 3,45 млрд USD. Суммарные валютные активы на эту дату: 58,84 млрд USD. <a href="{portfolio_source}">Открыть годовой отчёт НБРК</a>.</p>
     </section>
 
     <section aria-labelledby="history-title">

@@ -238,7 +238,7 @@ def series_stats(
 
     body = "".join(
         f"<div><dt>{html.escape(name)}</dt>"
-        f"<dd{f' class="{tone}"' if tone else ''}>{value}</dd></div>"
+        + (f'<dd class="{tone}">{value}</dd></div>' if tone else f"<dd>{value}</dd></div>")
         for name, value, tone in cells
     )
     return f'<dl class="series-stats">{body}</dl>'

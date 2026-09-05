@@ -29,6 +29,9 @@ def test_page_has_canonical_sources_and_honest_availability_note():
     assert 'aria-current="page">Нацфонд' in page
     assert "66,12" in page
     assert "Операции и трансферты: пока не включены" in page
+    assert "Состав сберегательного портфеля" in page
+    assert "36,3%" in page and "Альтернативные инструменты" in page
+    assert "не доли всего Нацфонда на текущую дату" in page
     assert "за вычетом обязательств" in page
     assert 'href="https://nationalbank.kz/assets"' in page
 

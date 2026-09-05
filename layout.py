@@ -13,12 +13,12 @@ import json
 SITE = "https://jbs.finance"
 
 TABS = [
-    ("hub", "Обзор", "/macroradar/"),
-    ("macro", "Макро", "/macroradar/macro/"),
-    ("trade", "Торговля", "/macroradar/trade/"),
-    ("fund", "Нацфонд", "/macroradar/national-fund/"),
-    ("budget", "Бюджет", "/macroradar/budget/"),
-    ("tax", "Ставки", "/macroradar/tax/"),
+    ("hub", "Обзор", "#overview"),
+    ("macro", "Макро", "#macro"),
+    ("trade", "Торговля", "#trade"),
+    ("fund", "Нацфонд", "#national-fund"),
+    ("budget", "Бюджет", "#budget"),
+    ("tax", "Ставки", "#tax"),
 ]
 
 HEADER_STYLE = """
