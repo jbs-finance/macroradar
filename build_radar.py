@@ -1,4 +1,4 @@
-"""Сборка главной страницы радара jbs.finance/radar.
+"""Сборка макроанализа jbs.finance/macroradar/macro/.
 
 Верх страницы рассчитан на три секунды: семь показателей, у каждого четыре слоя
 контекста (значение, изменение, место в диапазоне за пять лет, форма движения) и
@@ -348,15 +348,16 @@ def build(radar: dict, pulse: dict, trade: dict) -> str:
         meta=meta_tags(
             "Радар экономики Казахстана: ставка, инфляция, курс, оплата труда",
             share_description(radar, by_id),
-            "/radar/",
+            "/macroradar/macro/",
         )
         + "\n"
         + dataset_jsonld(
             generated.isoformat(),
             [s["source"] for s in radar.get("series", [])]
             + [s["source"] for s in pulse.get("series", [])],
+            path="/macroradar/macro/",
         ),
-        header=site_header("radar"),
+        header=site_header("macro"),
         generated_human=generated.strftime("%d.%m.%Y %H:%M UTC"),
         generated_iso=generated.isoformat(),
         next_line=next_line,

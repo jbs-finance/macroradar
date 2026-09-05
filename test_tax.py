@@ -121,7 +121,7 @@ class TestPage:
         assert "{{" not in page and ":root {" in page
 
     def test_noindex_present(self):
-        assert 'rel="canonical" href="https://jbs.finance/radar/tax/"' in self.page()
+        assert 'rel="canonical" href="https://jbs.finance/macroradar/tax/"' in self.page()
         assert "noindex" not in self.page()
 
     def test_disclaimer_is_present_and_explicit(self):

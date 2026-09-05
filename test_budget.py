@@ -297,4 +297,4 @@ def test_rates_page_has_no_dashboard():
     )
     page = build_tax.build(data)
     assert "Сколько собирают" not in page and "plan-table" not in page
-    assert "/radar/budget/" in page
+    assert "/macroradar/budget/" in page

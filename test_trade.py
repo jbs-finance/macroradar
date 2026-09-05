@@ -205,7 +205,7 @@ class TestPage:
         assert "<script" not in page
 
     def test_noindex_present(self):
-        assert 'rel="canonical" href="https://jbs.finance/radar/trade/"' in build(self.dataset())
+        assert 'rel="canonical" href="https://jbs.finance/macroradar/trade/"' in build(self.dataset())
         assert "noindex" not in build(self.dataset())
 
     def test_css_actually_rendered(self):

@@ -1,4 +1,4 @@
-"""Сборка страницы jbs.finance/radar/budget/ из out/minfin.json и out/budget.json.
+"""Сборка страницы jbs.finance/macroradar/budget/ из out/minfin.json и out/budget.json.
 
 Дашборд поступлений: сколько собрано, как исполняется план, кто платит по регионам.
 Норма налогов живёт отдельно, на странице ставок: справочник читают, чтобы посчитать
@@ -75,7 +75,7 @@ def page_jsonld(minfin: dict | None, budget: dict | None, generated: datetime) -
         sources,
         name="Поступления налогов в бюджет Казахстана",
         description="Налоговые поступления Казахстана: " + ", ".join(parts) + ".",
-        path="/radar/budget/",
+        path="/macroradar/budget/",
     )
 
 
@@ -98,7 +98,7 @@ def build(
             "Налоговые поступления в бюджет Казахстана помесячно: факт против плана, "
             "исполнение по видам налогов, разбивка по регионам и уровням бюджета. "
             "Данные Минфина и Комитета госдоходов, обновляются ежедневно.",
-            "/radar/budget/",
+            "/macroradar/budget/",
         )
         + page_jsonld(minfin, budget, generated),
         header=site_header("budget"),
@@ -151,7 +151,7 @@ TEMPLATE = """<!doctype html>
 
     <div class="cross">
       <p>Ставки, пороги и сроки уплаты собраны отдельно, в
-        <a href="/radar/tax/">справочнике налогов</a>: там норма, здесь факт.</p>
+        <a href="/macroradar/tax/">справочнике налогов</a>: там норма, здесь факт.</p>
     </div>
 {cta}
   </main>

@@ -13,10 +13,11 @@ import json
 SITE = "https://jbs.finance"
 
 TABS = [
-    ("radar", "Макро", "/radar/"),
-    ("trade", "Торговля", "/radar/trade/"),
-    ("budget", "Бюджет", "/radar/budget/"),
-    ("tax", "Ставки", "/radar/tax/"),
+    ("hub", "Обзор", "/macroradar/"),
+    ("macro", "Макро", "/macroradar/macro/"),
+    ("trade", "Торговля", "/macroradar/trade/"),
+    ("budget", "Бюджет", "/macroradar/budget/"),
+    ("tax", "Ставки", "/macroradar/tax/"),
 ]
 
 HEADER_STYLE = """
@@ -27,21 +28,28 @@ HEADER_STYLE = """
   font-weight: 600; font-size: 0.9375rem; }
 .site-brand .mark { width: 28px; height: 28px; background: #A8522F; border-radius: 3px; display: inline-flex;
   align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; color: #fff; }
-.site-links { display: flex; gap: 1.1rem; font-size: 0.875rem; }
+.site-links { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.5rem 1.1rem; font-size: 0.875rem; }
 .site-links a { color: rgba(245,240,232,0.8); text-decoration: none; transition: color var(--dur-in) var(--ease-out); }
 .site-links a:hover, .site-links a:focus-visible { color: #fff; }
 .tabs { position: sticky; top: 0; z-index: 20; background: var(--bg); border-bottom: 1px solid var(--muted);
   transition: box-shadow var(--dur-in) var(--ease-out); }
 .tabs .inner { max-width: 1120px; margin-inline: auto; padding-inline: clamp(1rem, 4vw, 2.5rem);
-  display: flex; gap: 0.25rem; overflow-x: auto; }
-.tabs a { display: inline-block; padding: 0.8rem 0.9rem; color: var(--muted-fg); text-decoration: none;
+  display: flex; gap: 0.1rem; overflow-x: auto; scrollbar-width: thin; }
+.tabs a { display: inline-block; padding: 0.8rem 0.75rem; color: var(--muted-fg); text-decoration: none;
   font-size: 0.9375rem; font-weight: 500; border-bottom: 2px solid transparent; white-space: nowrap;
   transition: color var(--dur-in) var(--ease-out), border-color var(--dur-in) var(--ease-out); }
 .tabs a[aria-current="page"] { color: var(--fg); border-bottom-color: var(--accent); }
 .tabs a:hover, .tabs a:focus-visible { color: var(--fg); }
-.tabs .title { margin-inline-end: auto; padding: 0.8rem 0; font-weight: 600; color: var(--fg); font-size: 0.9375rem; }
+.tabs .title { margin-inline-end: auto; padding: 0.8rem 0.75rem 0.8rem 0; font-weight: 600; color: var(--fg); font-size: 0.9375rem; white-space: nowrap; }
 [id] { scroll-margin-top: 64px; }
-@media (max-width: 640px) { .site-links a:not(:last-child) { display: none; } .tabs .title { display: none; } }
+@media (max-width: 640px) {
+  .site-bar .inner { height: auto; min-height: 52px; padding-block: 0.65rem; align-items: flex-start; }
+  .site-brand { flex: 0 0 auto; }
+  .site-links { justify-content: flex-end; gap: 0.35rem 0.7rem; font-size: 0.75rem; }
+  .tabs .inner { justify-content: space-between; padding-inline: 0.65rem; overflow-x: visible; }
+  .tabs .title { display: none; }
+  .tabs a { padding-inline: 0.45rem; font-size: 0.8125rem; }
+}
 @media print { .site-bar, .tabs { display: none; } }
 """
 
@@ -49,7 +57,8 @@ HEADER_STYLE = """
 def site_header(active: str) -> str:
     """Тёмная полоса сайта плюс липкие вкладки радара."""
     tabs = "\n".join(
-        f'      <a href="{href}"{' aria-current="page"' if key == active else ""}>{label}</a>'
+        f'      <a href="{href}">{label}</a>' if key != active
+        else f'      <a href="{href}" aria-current="page">{label}</a>'
         for key, label, href in TABS
     )
     return f"""<div class="site-bar">
@@ -123,7 +132,7 @@ def dataset_jsonld(
         "базовая ставка, инфляция, курсы валют, рост ВВП, оплата труда, "
         "внешняя торговля."
     ),
-    path: str = "/radar/",
+    path: str = "/macroradar/",
 ) -> str:
     """Разметка набора данных: поисковику и языковой модели нужно понимать, что это
     регулярно обновляемые данные с названными источниками, а не статья."""

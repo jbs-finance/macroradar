@@ -349,7 +349,7 @@ class TestPage:
     def test_page_has_header_tabs_and_no_noindex(self):
         page = build(self.radar(), self.pulse(), {})
         assert "noindex" not in page
-        assert 'rel="canonical" href="https://jbs.finance/radar/"' in page
+        assert 'rel="canonical" href="https://jbs.finance/macroradar/macro/"' in page
         assert 'aria-current="page">Макро' in page
         assert "Радар экономики Казахстана" in page
 
