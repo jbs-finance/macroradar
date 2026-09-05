@@ -25,7 +25,7 @@ from layout import (
 )
 from budget_block import BUDGET_STYLE, budget_section
 from compare_block import COMPARE_STYLE
-from minfin_block import MINFIN_STYLE, minfin_section
+from minfin_block import LEVELS_STYLE, MINFIN_STYLE, minfin_section
 from build_pulse import STYLE, fmt_date
 
 HERE = Path(__file__).resolve().parent
@@ -178,6 +178,7 @@ def build(
         + BUDGET_STYLE
         + COMPARE_STYLE
         + MINFIN_STYLE
+        + LEVELS_STYLE
         + drill_rules,
         budget=budget_html,
         minfin=minfin_section(minfin),

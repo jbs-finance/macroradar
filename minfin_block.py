@@ -1,8 +1,12 @@
 """Блок «Исполнение бюджета» для страницы /radar/tax/ по данным Минфина.
 
-Три части: итог свежего периода, помесячные поступления против плана и разрез по
-видам налогов с процентом исполнения. Скриптов нет, страница отдаётся с запретом
-на них: всё, что здесь движется, движется на CSS.
+Четыре части: итог свежего периода, помесячные поступления против плана, разрез по
+видам налогов с процентом исполнения и сравнение уровней бюджета. Скриптов нет,
+страница отдаётся с запретом на них: всё, что здесь движется, движется на CSS.
+
+Разбивки по областям в этих отчётах нет: отчёт по местным бюджетам сводный по
+стране. Регионы берутся у КГД в budget_block, поэтому здесь уровни бюджета, а не
+география.
 """
 
 from __future__ import annotations
@@ -387,6 +391,7 @@ def minfin_section(data: dict | None) -> str:
         '<p class="lede">Нарастающим итогом с начала года, млрд тенге. План это '
         "сводный план поступлений на отчётный период, а не годовой бюджет.</p>",
         plan_table(latest),
+        levels_section(data),
     ]
     notes = [
         "<li>Помесячные суммы вычислены как разности накопительных отчётов: "
@@ -408,3 +413,128 @@ def minfin_section(data: dict | None) -> str:
         f'<div class="details-body"><ul>{"".join(notes)}</ul></div></details>'
     )
     return "\n".join(parts)
+
+
+LEVELS_STYLE = """
+.lv { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  margin-block: 1rem; }
+.lv-card { background: var(--card); border: 1px solid var(--muted); border-radius: var(--radius);
+  padding: 0.9rem 1rem 1rem; }
+.lv-card h4 { margin: 0 0 0.15rem; font-size: 0.9375rem; }
+.lv-card .lv-sub { margin: 0 0 0.7rem; font-size: 0.75rem; color: var(--muted-fg); }
+.lv-figures { display: flex; flex-wrap: wrap; gap: 0.15rem 1.25rem; margin: 0; }
+.lv-figures div { display: flex; gap: 0.35rem; align-items: baseline; }
+.lv-figures dt { margin: 0; font-size: 0.75rem; color: var(--muted-fg); }
+.lv-figures dd { margin: 0; font-size: 0.9375rem; font-weight: 600;
+  font-family: "JetBrains Mono", ui-monospace, monospace; }
+.lv-bar { display: flex; height: 0.7rem; border-radius: 999px; overflow: hidden;
+  margin-top: 0.8rem; background: var(--muted); }
+.lv-bar i { display: block; animation: lv-grow 0.6s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  transform-origin: left; }
+.lv-bar i.own { background: var(--accent); }
+.lv-bar i.transfer { background: #8C7B6B; }
+.lv-bar i.other { background: #D8C7AE; }
+.lv-legend { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 0.5rem 0 0;
+  font-size: 0.75rem; color: var(--muted-fg); }
+.lv-legend span { display: inline-flex; align-items: center; gap: 0.3rem; }
+.lv-legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+.lv-legend i.own { background: var(--accent); }
+.lv-legend i.transfer { background: #8C7B6B; }
+.lv-legend i.other { background: #D8C7AE; }
+
+@keyframes lv-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .lv-bar i { animation: none; }
+}
+"""
+
+
+def is_tax_category(item: dict) -> bool:
+    """«Неналоговые поступления» содержат в себе слово «налоговые»: сравнение по
+    подстроке засчитывало их как налоги и завышало долю."""
+    return item.get("code") == "1" or item["name"].lower().startswith("налоговые")
+
+
+def income_split(income: list[dict]) -> dict:
+    """Доходы уровня: собственные, трансферты и всё остальное."""
+    total = sum(i["fact"] for i in income) or 1
+    transfers = sum(i["fact"] for i in income if "рансферт" in i["name"])
+    taxes = sum(i["fact"] for i in income if is_tax_category(i))
+    return {
+        "total": total,
+        "taxes": taxes,
+        "transfers": transfers,
+        "other": total - taxes - transfers,
+    }
+
+
+def level_card(title: str, subtitle: str, latest: dict) -> str:
+    split = income_split(latest.get("income") or [])
+    total = latest["total"]
+    pct = total["pct"] or (total["fact"] / total["plan"] * 100 if total["plan"] else 0)
+    figures = [
+        ("Налоги", fmt_num(total["fact"], 0)),
+        ("Исполнение", f"{fmt_num(pct, 1)}%"),
+        ("Все доходы", fmt_num(split["total"], 0)),
+    ]
+    body = "".join(
+        f"<div><dt>{name}</dt><dd>{value}</dd></div>" for name, value in figures
+    )
+    shares = [
+        ("own", split["taxes"], "налоги"),
+        ("other", split["other"], "прочие доходы"),
+        ("transfer", split["transfers"], "трансферты"),
+    ]
+    bar = "".join(
+        f'<i class="{cls}" style="width: {value / split["total"] * 100:.1f}%; '
+        f'animation-delay: {n * 0.08:.2f}s" title="{label}: '
+        f'{fmt_num(value / split["total"] * 100, 1)}%"></i>'
+        for n, (cls, value, label) in enumerate(shares)
+        if value > 0
+    )
+    return (
+        f'<article class="lv-card"><h4>{title}</h4>'
+        f'<p class="lv-sub">{subtitle}</p>'
+        f'<dl class="lv-figures">{body}</dl>'
+        f'<div class="lv-bar">{bar}</div></article>'
+    )
+
+
+def levels_section(data: dict) -> str:
+    """Сколько из собранного остаётся на местах и чем живут местные бюджеты."""
+    state, local = data.get("latest"), data.get("local")
+    if not state or not local:
+        return ""
+    label = period_label(local["year"], local["months"])
+    local_split = income_split(local.get("income") or [])
+    share_of_taxes = (
+        local["total"]["fact"] / state["total"]["fact"] * 100
+        if state["total"]["fact"]
+        else 0
+    )
+    transfer_share = local_split["transfers"] / local_split["total"] * 100
+    return "\n".join(
+        [
+            "<h3>Республика и места</h3>",
+            '<p class="lede">Из всех собранных налогов местным бюджетам достаётся '
+            f"<b>{fmt_num(share_of_taxes, 1)}%</b>, а <b>{fmt_num(transfer_share, 1)}%</b> "
+            "их доходов приходит трансфертами из республиканского бюджета. "
+            f"Оба отчёта за {label}.</p>",
+            '<div class="lv">'
+            + level_card(
+                "Государственный бюджет",
+                "республиканский и местные вместе",
+                state,
+            )
+            + level_card(
+                "Местные бюджеты",
+                "области, города республиканского значения и столица",
+                local,
+            )
+            + "</div>",
+            '<p class="lv-legend"><span><i class="own"></i>налоги</span>'
+            '<span><i class="other"></i>прочие доходы</span>'
+            '<span><i class="transfer"></i>трансферты</span></p>',
+        ]
+    )

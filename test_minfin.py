@@ -361,3 +361,104 @@ def test_page_dataset_names_both_sources():
     page = build_page()
     assert "Министерство финансов РК" in page
     assert "Комитет государственных доходов МФ РК" in page
+
+
+# --- Уровни бюджета ------------------------------------------------------------
+
+
+def income_rows() -> list[list[str]]:
+    """Категории доходов, а следом функциональные группы затрат."""
+    def row(code, level, name, plan, fact):
+        return (
+            [code]
+            + ["" if i != level else name for i in range(1, 7)]
+            + ["", "", ""]
+            + [money(plan), money(fact), "", "", "", "95", ""]
+        )
+
+    return [
+        ["Коды бюджетной классификации", "Наименование"] + [""] * 15,
+        ["1", "2"] + [""] * 15,
+        row("1", 1, "Налоговые поступления", 100, 96),
+        row("01", 2, "Подоходный налог", 60, 54),
+        row("2", 1, "Неналоговые поступления", 10, 12),
+        row("5", 1, "Поступления трансфертов", 80, 80),
+        row("01", 1, "Государственные услуги общего характера", 30, 40),
+        row("04", 1, "Образование", 50, 70),
+    ]
+
+
+def test_parse_income_stops_before_expenses():
+    """Ниже доходов идут функциональные группы затрат с двузначным кодом."""
+    from minfin import parse_income
+
+    income = parse_income(income_rows())
+    assert [i["name"] for i in income] == [
+        "Налоговые поступления",
+        "Неналоговые поступления",
+        "Поступления трансфертов",
+    ]
+
+
+def test_parse_income_skips_header_rows():
+    from minfin import parse_income
+
+    income = parse_income(income_rows())
+    assert all(i["code"].isdigit() and len(i["code"]) == 1 for i in income)
+
+
+def test_income_split_separates_transfers():
+    from minfin_block import income_split
+
+    split = income_split(
+        [
+            {"name": "Налоговые поступления", "fact": 50.0},
+            {"name": "Неналоговые поступления", "fact": 10.0},
+            {"name": "Поступления трансфертов", "fact": 40.0},
+        ]
+    )
+    assert split["taxes"] == 50.0
+    assert split["transfers"] == 40.0
+    assert split["other"] == pytest.approx(10.0)
+
+
+def sample_with_local() -> dict:
+    data = sample_minfin()
+    data["latest"]["income"] = [
+        {"code": "1", "name": "Налоговые поступления", "fact": 14112.0, "plan": 14690.0},
+        {"code": "5", "name": "Поступления трансфертов", "fact": 1400.0, "plan": 1400.0},
+    ]
+    data["local"] = {
+        "year": 2026,
+        "months": 7,
+        "period": "2026-07",
+        "url": "https://www.gov.kz/y",
+        "total": {"plan": 5170.0, "fact": 4764.0, "pct": 92.1},
+        "items": [],
+        "income": [
+            {"code": "1", "name": "Налоговые поступления", "fact": 4764.0, "plan": 5170.0},
+            {"code": "2", "name": "Неналоговые поступления", "fact": 479.0, "plan": 430.0},
+            {"code": "5", "name": "Поступления трансфертов", "fact": 3620.0, "plan": 3617.0},
+        ],
+    }
+    return data
+
+
+def test_levels_section_shows_share_and_transfers():
+    from minfin_block import levels_section
+
+    html = levels_section(sample_with_local())
+    assert "33,8%" in html  # 4764 из 14112 остаётся местным
+    assert "40,8%" in html  # доля трансфертов в доходах местных бюджетов
+    assert "Местные бюджеты" in html
+
+
+def test_levels_section_empty_without_local():
+    from minfin_block import levels_section
+
+    assert levels_section(sample_minfin()) == ""
+
+
+def test_minfin_section_includes_levels():
+    html = minfin_section(sample_with_local())
+    assert "Республика и места" in html
