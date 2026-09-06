@@ -32,6 +32,7 @@ UA = {"User-Agent": "jbs-kz-data/1.0 (+https://jbs.finance)"}
 TALDAU_HEADERS = {**UA, "X-Requested-With": "XMLHttpRequest"}
 TIMEOUT = 45
 RETRIES = 3
+RETRY_PAUSE = 1.5  # база растущей паузы: 1.5, 3, 6 секунд
 # Потолок ответа: разбор XML стандартным парсером, ограничение размера закрывает
 # раздувание сущностями, если источник когда-нибудь отдаст не то, что обещает.
 MAX_BODY = 8 * 1024 * 1024
@@ -130,6 +131,10 @@ FX_SERIES = [
 ]
 
 FX_MONTHS = 36
+# Доля собранных точек, ниже которой ряд подписывается как неполный, и доля, ниже
+# которой он не публикуется вовсе.
+FX_FULL_COVERAGE = 0.9
+FX_MIN_COVERAGE = 0.5
 KEEP_LAST_YEARS = 20
 
 # Бюро национальной статистики через Taldau. Открытого API у БНС нет, работает
@@ -209,6 +214,17 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def retriable(exc: Exception) -> bool:
+    """Стоит ли повторять запрос: 404 и 400 повтором не лечатся, 429 и 5xx лечатся."""
+    if isinstance(exc, urllib.error.HTTPError):
+        return exc.code == 429 or exc.code >= 500
+    return True
+
+
+def backoff(attempt: int) -> None:
+    time.sleep(RETRY_PAUSE * 2**attempt)
+
+
 def fetch(url: str, raw_name: str) -> bytes:
     """GET с ретраями. Сырой ответ кладётся в raw/ до любого разбора."""
     ctx = ssl.create_default_context()
@@ -223,7 +239,48 @@ def fetch(url: str, raw_name: str) -> bytes:
             return body
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             last = exc
-            time.sleep(1.5 * (attempt + 1))
+            if not retriable(exc) or attempt == RETRIES - 1:
+                break
+            backoff(attempt)
+    raise SourceError(f"{url}: {last}")
+
+
+def fetch_json(
+    url: str,
+    raw_name: str | None = None,
+    timeout: int = TIMEOUT,
+    retries: int = RETRIES,
+    headers: dict | None = None,
+    max_body: int = MAX_BODY,
+):
+    """JSON с ретраями и растущей паузой.
+
+    Обходы областей и списков Минфина идут сотнями одиночных запросов: без повтора
+    одна сетевая икота выбрасывает из сборки целый регион или целый отчёт."""
+    last: Exception | None = None
+    for attempt in range(retries):
+        try:
+            req = urllib.request.Request(url, headers=headers or UA)
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                body = resp.read(max_body + 1)
+            # Обрезанный ответ разбирается как «битый JSON», и причина теряется:
+            # потолок объявляется явной ошибкой.
+            if len(body) > max_body:
+                raise SourceError(f"{url}: ответ больше {max_body} байт")
+            if raw_name:
+                RAW.mkdir(parents=True, exist_ok=True)
+                (RAW / raw_name).write_bytes(body)
+            return json.loads(body.decode("utf-8", "ignore"))
+        except (
+            urllib.error.URLError,
+            TimeoutError,
+            OSError,
+            json.JSONDecodeError,
+        ) as exc:
+            last = exc
+            if not retriable(exc) or attempt == retries - 1:
+                break
+            backoff(attempt)
     raise SourceError(f"{url}: {last}")
 
 
@@ -292,10 +349,16 @@ def parse_nbk_xml(body: bytes) -> dict[str, float]:
     return rates
 
 
-def fetch_fx(codes: list[str], months: int, today: date) -> dict[str, list[Obs]]:
-    """Курсы на набор дат. Пустая дата (выходной) сдвигается вперёд до трёх дней."""
+def fetch_fx(
+    codes: list[str], months: int, today: date
+) -> tuple[dict[str, list[Obs]], int]:
+    """Курсы на набор дат. Пустая дата (выходной) сдвигается вперёд до трёх дней.
+
+    Вторым значением возвращается число запрошенных дат: без него недобор ряда
+    неотличим от полного ряда, и три точки вместо тридцати семи уедут как свежие."""
     collected: dict[str, list[Obs]] = {code: [] for code in codes}
-    for point in month_points(months, today):
+    points = month_points(months, today)
+    for point in points:
         for shift in range(3):
             day = point + timedelta(days=shift)
             if day > today:
@@ -312,7 +375,7 @@ def fetch_fx(codes: list[str], months: int, today: date) -> dict[str, list[Obs]]
                 if code in rates:
                     collected[code].append(Obs(date=day.isoformat(), value=rates[code]))
             break
-    return collected
+    return collected, len(points)
 
 
 FREQ_BY_PERIOD = {"Год": "A", "Квартал": "Q", "Месяц": "M"}
@@ -433,8 +496,11 @@ def fetch_bns(spec: dict) -> Series:
     )
 
 
-def validate(series: Series, bounds: dict) -> list[str]:
-    """Гейт публикации. Непустой список означает, что ряд публиковать нельзя."""
+def validate(series: Series, bounds: dict, today: date | None = None) -> list[str]:
+    """Гейт публикации. Непустой список означает, что ряд публиковать нельзя.
+
+    Дата приходит снаружи: сборка, пересекающая полночь, иначе сверяет разные ряды
+    с разными «сегодня»."""
     problems: list[str] = []
     if not series.obs:
         problems.append("ряд пустой")
@@ -457,11 +523,22 @@ def validate(series: Series, bounds: dict) -> list[str]:
             )
             break
 
-    age_days, limit = freshness(series.obs[-1].date, series.freq)
+    age_days, limit = freshness(series.obs[-1].date, series.freq, today)
     if age_days > limit:
         problems.append(f"последняя точка {series.obs[-1].date} старше {limit} дней")
 
     return problems
+
+
+def coverage_gap(got: int, expected: int) -> str | None:
+    """Пометка о недоборе точек. None означает, что ряд собран целиком.
+
+    Каждая неудачная дата курсов пропускается молча, а гейт публикации смотрит на
+    сортировку, дубли, диапазон и возраст последней точки: недобора он не видит, и
+    ряд из трёх точек вместо тридцати семи уезжает как свежий и полный."""
+    if not expected or got >= expected * FX_FULL_COVERAGE:
+        return None
+    return f"собрано {got} точек из {expected}: источник ответил не на все даты"
 
 
 def period_end(last: str, freq: str) -> date:
@@ -478,14 +555,15 @@ def period_end(last: str, freq: str) -> date:
     return date.fromisoformat(last)
 
 
-def freshness(last: str, freq: str) -> tuple[int, int]:
+def freshness(last: str, freq: str, today: date | None = None) -> tuple[int, int]:
     """Возраст последней точки и предел терпимости для этой периодичности.
 
     Пределы шире одного периода: статистика публикуется с лагом, и ряд, отставший
     на один срок публикации, это норма источника, а не поломка сборки.
     """
     limits = {"A": 800, "Q": 240, "M": 120, "D": 14}
-    return (date.today() - period_end(last, freq)).days, limits.get(freq, 14)
+    today = today or date.today()
+    return (today - period_end(last, freq)).days, limits.get(freq, 14)
 
 
 def load_previous(dataset: Path) -> dict[str, dict]:
@@ -500,8 +578,10 @@ def load_previous(dataset: Path) -> dict[str, dict]:
     return {s["series_id"]: s for s in data.get("series", [])}
 
 
-def build(dataset: Path = DATASET) -> dict:
-    today = date.today()
+def build(dataset: Path = DATASET, today: date | None = None) -> dict:
+    # Дата фиксируется один раз на прогон: сборка, пересекающая полночь, иначе
+    # сверяет свежесть разных рядов с разными «сегодня».
+    today = today or date.today()
     previous = load_previous(dataset)
     result: list[dict] = []
     report: list[str] = []
@@ -521,15 +601,16 @@ def build(dataset: Path = DATASET) -> dict:
         except SourceError as exc:
             keep_previous(spec["series_id"], f"источник недоступен ({exc})")
             continue
-        problems = validate(series, spec)
+        problems = validate(series, spec, today)
         if problems:
             keep_previous(spec["series_id"], "; ".join(problems))
             continue
         result.append(asdict(series))
 
-    fx_raw = fetch_fx([s["code"] for s in FX_SERIES], FX_MONTHS, today)
+    fx_raw, fx_expected = fetch_fx([s["code"] for s in FX_SERIES], FX_MONTHS, today)
     for spec in FX_SERIES:
         obs = fx_raw.get(spec["code"], [])
+        gap = coverage_gap(len(obs), fx_expected)
         series = Series(
             series_id=spec["series_id"],
             name_ru=spec["name_ru"],
@@ -539,11 +620,17 @@ def build(dataset: Path = DATASET) -> dict:
             source_url=f"{NBK_HOST}/rss/get_rates.cfm",
             fetched_at=_now(),
             obs=obs,
+            note=gap or "",
         )
-        problems = validate(series, spec)
+        problems = validate(series, spec, today)
+        if len(obs) < fx_expected * FX_MIN_COVERAGE:
+            # Половины ряда мало даже для пометки: такой график врёт формой.
+            problems.append(gap or "ряд неполный")
         if problems:
             keep_previous(spec["series_id"], "; ".join(problems))
             continue
+        if gap:
+            report.append(f"{spec['series_id']}: {gap}")
         result.append(asdict(series))
 
     for spec in BNS_SERIES:
@@ -552,7 +639,7 @@ def build(dataset: Path = DATASET) -> dict:
         except SourceError as exc:
             keep_previous(spec["series_id"], f"источник недоступен ({exc})")
             continue
-        problems = validate(series, spec)
+        problems = validate(series, spec, today)
         if problems:
             keep_previous(spec["series_id"], "; ".join(problems))
             continue
@@ -576,6 +663,12 @@ def main() -> None:
     for issue in data["issues"]:
         print(f"  проблема: {issue}")
     print(f"Записано: {dataset}")
+    # Ряд, который не собрался и которого нет даже в прошлом снапшоте, потерян
+    # целиком: молча выйти с нулём значит выдать дыру за успешную сборку.
+    expected = {s["series_id"] for s in WB_SERIES + FX_SERIES + BNS_SERIES}
+    lost = sorted(expected - {s["series_id"] for s in data["series"]})
+    if lost:
+        raise SystemExit(f"потеряны ряды целиком: {', '.join(lost)}")
 
 
 if __name__ == "__main__":

@@ -27,6 +27,10 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+# Ошибка источника одна на все модули: у оболочек разные импорты, и две разные
+# исключения с одним именем расходились по except мимо друг друга.
+from etl import SourceError
+
 HERE = Path(__file__).resolve().parent
 RAW = HERE / "raw"
 DEFAULT_DATASET = HERE / "out" / "budget.json"
@@ -66,25 +70,83 @@ TAX_CODES = {
 }
 
 
-class SourceError(RuntimeError):
-    pass
+XLSX_MAGIC = b"PK\x03\x04"
+OLE_MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+# Часть управлений выкладывает вложения в 7z. Разобрать его нечем, но это файл
+# источника, а не страница ошибки: пусть лежит в кэше, а не качается каждый раз.
+SEVENZIP_MAGIC = b"7z\xbc\xaf\x27\x1c"
+HTML_START = re.compile(rb"^\s*(<!doctype|<html|<\?xml.{0,200}?<html)", re.IGNORECASE)
 
 
-def fetch_file(url: str, name: str, max_age_days: int = 7) -> bytes:
-    """Скачивание через curl: сертификат сайта не проходит проверку у Python."""
+def payload_problem(raw: bytes, expect: str, min_size: int) -> str | None:
+    """Почему скачанное нельзя считать файлом источника. None значит можно.
+
+    Проверка нужна до записи в кэш: curl без -f возвращает ноль на 404 и 503, тело
+    страницы ошибки больше порога размера ложилось в raw/ как успешная загрузка и
+    ломало блок неделями после того, как источник ожил."""
+    if len(raw) < min_size:
+        return f"ответ {len(raw)} байт, меньше порога {min_size}"
+    if expect == "page":
+        return None
+    if HTML_START.match(raw[:512]):
+        return "вместо файла пришла HTML-страница"
+    if expect == "xlsx" and not raw.startswith(XLSX_MAGIC):
+        return "файл не начинается с сигнатуры xlsx"
+    if expect == "document" and not raw.startswith(
+        (XLSX_MAGIC, OLE_MAGIC, SEVENZIP_MAGIC)
+    ):
+        return "файл не похож ни на архив, ни на книгу Excel"
+    return None
+
+
+def download(
+    url: str,
+    path: Path,
+    min_size: int = 1000,
+    expect: str = "xlsx",
+    timeout: int = 180,
+) -> bytes:
+    """Скачивание через curl мимо кэша: в raw/ файл попадает только после проверки.
+
+    curl зовётся потому, что у kgd.gov.kz в цепочке самоподписанный сертификат и
+    стандартный клиент Python его отвергает. Флаг -f обязателен: без него код
+    возврата ноль и на 404, и на 503."""
+    RAW.mkdir(parents=True, exist_ok=True)
+    part = path.with_name(path.name + ".part")
+    try:
+        result = subprocess.run(
+            ["curl", "-fsSL", "--max-time", str(timeout), url, "-o", str(part)],
+            capture_output=True,
+        )
+        if result.returncode != 0:
+            detail = result.stderr.decode("utf-8", "ignore").strip()[:120]
+            raise SourceError(
+                f"{url}: curl вернул {result.returncode} {detail}".strip()
+            )
+        raw = part.read_bytes() if part.exists() else b""
+        problem = payload_problem(raw, expect, min_size)
+        if problem:
+            raise SourceError(f"{url}: {problem}")
+        part.replace(path)
+        return raw
+    finally:
+        part.unlink(missing_ok=True)
+
+
+def fetch_file(
+    url: str, name: str, max_age_days: int = 7, expect: str = "xlsx"
+) -> bytes:
+    """Скачивание с кэшем в raw/. Битый кэш не переживает проверку и перекачивается."""
     RAW.mkdir(parents=True, exist_ok=True)
     path = RAW / name
-    if path.exists() and path.stat().st_size > 1000:
+    if path.exists():
+        raw = path.read_bytes()
         age = (datetime.now().timestamp() - path.stat().st_mtime) / 86400
-        if age < max_age_days:
-            return path.read_bytes()
-    result = subprocess.run(
-        ["curl", "-sL", "--max-time", "180", url, "-o", str(path)],
-        capture_output=True,
-    )
-    if result.returncode != 0 or not path.exists() or path.stat().st_size < 1000:
-        raise SourceError(f"{url}: curl вернул {result.returncode}")
-    return path.read_bytes()
+        if payload_problem(raw, expect, 1000):
+            path.unlink(missing_ok=True)  # кэш испорчен прошлым сбоем источника
+        elif age < max_age_days:
+            return raw
+    return download(url, path, expect=expect)
 
 
 # --- Разбор xlsx стандартной библиотекой -------------------------------------
@@ -234,9 +296,9 @@ def parse_dynamics(rows: list[list[str]]) -> dict:
 
 def fetch_dynamics() -> dict:
     """Свежий год помесячно плюс предыдущий: без базы сравнения график ни о чём."""
-    page = fetch_file(DYNAMICS_PAGE, "kgd_dynamics_page.html", max_age_days=7).decode(
-        "utf-8", "ignore"
-    )
+    page = fetch_file(
+        DYNAMICS_PAGE, "kgd_dynamics_page.html", max_age_days=7, expect="page"
+    ).decode("utf-8", "ignore")
     links = dynamics_links(page)
     url, year = links[0]
     raw = fetch_file(url, f"kgd_dynamics_{year}.bin", max_age_days=7)
@@ -311,12 +373,13 @@ def row_code(row: list[str], name_idx: int) -> str:
 
 
 def sheet_total(book: Workbook, path: str) -> float:
-    """Строка «Налоговые поступления» листа, в тысячах тенге."""
+    """Строка «Налоговые поступления» листа, в тысячах тенге.
+
+    Неразобранная шапка это ошибка, а не ноль: с нулём ломалась эвристика поиска
+    свода, и разрез начинал складывать свод вместе с листами органов, удваивая
+    суммы."""
     rows = book.rows(path)
-    try:
-        value_idx, name_idx = sheet_layout(rows)
-    except SourceError:
-        return 0.0
+    value_idx, name_idx = sheet_layout(rows)
     for row in rows:
         if len(row) > value_idx and row_code(row, name_idx) == "1":
             if "оступлен" in row[name_idx]:
@@ -388,29 +451,37 @@ def period_matches(modified: str, year: int, month: int) -> bool:
 
 
 def fetch_structure() -> dict:
-    page = fetch_file(FACT_PAGE, "kgd_fact_page.html", max_age_days=7).decode(
-        "utf-8", "ignore"
-    )
+    page = fetch_file(
+        FACT_PAGE, "kgd_fact_page.html", max_age_days=7, expect="page"
+    ).decode("utf-8", "ignore")
     skipped: list[str] = []
+    # Перебор идёт до первого разобравшегося месяца. Плохой файл выбывает сам:
+    # раньше на нём обрывался весь перебор, и пять следующих месяцев, которые
+    # могли разобраться, не пробовались вовсе.
     for url, year, month in fact_links(page)[:6]:
-        book = Workbook(fetch_file(url, f"kgd_fact_{year}_{month:02d}.bin"))
-        if not period_matches(book.modified, year, month):
-            skipped.append(f"{year}-{month:02d} (файл от {book.modified or '?'})")
-            continue
-        items = parse_fact(book)
-        summary = summary_sheet(book)
-        declared = (
-            sheet_total(book, summary) / 1e6
-            if summary
-            else sum(sheet_total(book, p) for _, p in book.sheets) / 2e6
-        )
-        collected = sum(i["value"] for i in items)
-        # Коды 101-108 не покрывают все налоговые поступления, но должны давать
-        # основную часть: расхождение больше пятой части значит сбой разбора.
-        if declared and abs(collected - declared) / declared > 0.2:
-            raise SourceError(
-                f"разрез не сходится с итогом файла: {collected:.0f} против {declared:.0f}"
+        try:
+            book = Workbook(fetch_file(url, f"kgd_fact_{year}_{month:02d}.bin"))
+            if not period_matches(book.modified, year, month):
+                skipped.append(f"{year}-{month:02d} (файл от {book.modified or '?'})")
+                continue
+            items = parse_fact(book)
+            summary = summary_sheet(book)
+            declared = (
+                sheet_total(book, summary) / 1e6
+                if summary
+                else sum(sheet_total(book, p) for _, p in book.sheets) / 2e6
             )
+            collected = sum(i["value"] for i in items)
+            # Коды 101-108 не покрывают все налоговые поступления, но должны давать
+            # основную часть: расхождение больше пятой части значит сбой разбора.
+            if declared and abs(collected - declared) / declared > 0.2:
+                skipped.append(
+                    f"{year}-{month:02d} (разрез {collected:.0f} против итога {declared:.0f})"
+                )
+                continue
+        except (SourceError, OSError) as exc:
+            skipped.append(f"{year}-{month:02d} ({exc})")
+            continue
         return {
             "period": f"{year}-{month:02d}",
             "year": year,
@@ -421,7 +492,7 @@ def fetch_structure() -> dict:
             "skipped": skipped,
             "source_url": FACT_PAGE,
         }
-    raise SourceError(f"ни один месячный файл не подтверждён датой: {skipped}")
+    raise SourceError(f"ни один месячный файл не разобрался: {'; '.join(skipped)}")
 
 
 def build() -> dict:
@@ -471,6 +542,17 @@ def main() -> None:
     for issue in data["issues"]:
         print(f"  проблема: {issue}")
     print(f"Записано: {dataset}")
+    # Раздел, которого нет ни свежим, ни прошлым, потерян целиком.
+    lost = [
+        name
+        for key, name in (
+            ("dynamics", "динамика поступлений"),
+            ("structure", "структура поступлений"),
+        )
+        if not data[key]
+    ]
+    if lost:
+        raise SystemExit(f"потеряны разделы целиком: {', '.join(lost)}")
 
 
 if __name__ == "__main__":

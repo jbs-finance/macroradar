@@ -94,8 +94,19 @@ def pct_change(series: dict, days_back: int) -> float | None:
 
 def spark(obs: list[dict], width: int = 320, height: int = 64) -> str:
     """Линия ряда в SVG. Ось Y растянута по фактическому размаху, не от нуля:
-    задача показать форму движения, а не абсолютный масштаб."""
-    values = [o["value"] for o in obs]
+    задача показать форму движения, а не абсолютный масштаб.
+
+    Ряд короче двух точек рисовать нечем: polyline из одной координаты браузер
+    не отображает, и карточка получала пустой прямоугольник вместо графика."""
+    values = [o["value"] for o in obs if o.get("value") is not None]
+    if len(values) < 2:
+        return (
+            f'<svg class="spark spark-empty" viewBox="0 0 {width} {height}" '
+            f'role="img" aria-label="данных для графика нет" focusable="false">'
+            f'<text x="{width / 2:.0f}" y="{height / 2 + 4:.0f}" '
+            f'text-anchor="middle">данных для графика нет</text>'
+            f"</svg>"
+        )
     lo, hi = min(values), max(values)
     span = hi - lo or 1
     step = width / max(len(values) - 1, 1)
@@ -350,6 +361,7 @@ h2 { font-size: 1.25rem; margin: 2.5rem 0 1rem; }
 .delta-down .delta-value { color: var(--down); }
 .delta-note, .delta-none { color: var(--muted-fg); }
 .spark { width: 100%; height: 64px; margin-top: 0.4rem; display: block; }
+.spark-empty text { fill: var(--muted-fg); font-size: 12px; }
 .spark-line { fill: none; stroke: var(--accent); stroke-width: 1.75; vector-effect: non-scaling-stroke;
   stroke-linejoin: round; stroke-linecap: round; }
 .spark-area { fill: var(--accent); opacity: 0.08; }

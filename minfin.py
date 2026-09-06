@@ -21,14 +21,12 @@ from __future__ import annotations
 
 import json
 import re
-import subprocess
 import sys
-import urllib.error
-import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-from budget import SourceError, Workbook, as_number
+from budget import SourceError, Workbook, as_number, download, payload_problem
+from etl import fetch_json
 
 HERE = Path(__file__).resolve().parent
 RAW = HERE / "raw"
@@ -114,13 +112,16 @@ COL_PCT = 15
 MAX_REPORTS = 15
 KEEP_MONTHS = 24
 
+# Списки документов gov.kz весят десятки мегабайт: в поле full_text лежит
+# полный текст каждой карточки. Общий потолок ответа их обрезает, а обрезанный
+# JSON выглядит как битый источник.
+LISTING_MAX_BODY = 128 * 1024 * 1024
+
 
 def api_json(url: str, timeout: int = 90):
-    try:
-        with urllib.request.urlopen(url, timeout=timeout) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except (urllib.error.URLError, json.JSONDecodeError, TimeoutError) as exc:
-        raise SourceError(f"{url}: {exc}") from exc
+    """Список или карточка gov.kz. Ретраи общие с остальными источниками: одиночный
+    запрос без повтора ронял весь прогон на первом же обрыве соединения."""
+    return fetch_json(url, timeout=timeout, max_body=LISTING_MAX_BODY)
 
 
 def parse_title(title: str, kind: str = "state") -> tuple[int, int] | None:
@@ -156,6 +157,7 @@ def reports(kind: str = "state") -> list[dict]:
             if not stamp:
                 continue
             year, months = covered_period(*stamp)
+            files = [f for f in (row.get("full_text") or []) if f.get("document")]
             found.setdefault(
                 (year, months),
                 {
@@ -163,6 +165,9 @@ def reports(kind: str = "state") -> list[dict]:
                     "year": year,
                     "months": months,
                     "published": (row.get("created_date") or "")[:10],
+                    # Ссылка берётся из списка: карточка части отчётов отвечает
+                    # пустым объектом, и такой отчёт считался «без файла».
+                    "document": files[0]["document"] if files else "",
                 },
             )
         if len(chunk) < 100:
@@ -172,27 +177,35 @@ def reports(kind: str = "state") -> list[dict]:
     return [found[key] for key in sorted(found, reverse=True)]
 
 
+def card_document(doc_id) -> str:
+    """Ссылка на файл из карточки документа. Запасной путь: у части отчётов
+    карточка отвечает пустым объектом, и тогда работает ссылка из списка."""
+    card = api_json(f"{API}/{doc_id}")
+    files = (
+        [f for f in (card.get("full_text") or []) if f.get("document")]
+        if isinstance(card, dict)
+        else []
+    )
+    if not files:
+        raise SourceError(f"у отчёта {doc_id} нет файла ни в списке, ни в карточке")
+    return files[0]["document"]
+
+
 def fetch_report(report: dict) -> Workbook:
-    """Файл отчёта по его карточке. Опубликованный отчёт не меняется, поэтому
-    кэш держится без срока."""
+    """Файл отчёта. Опубликованный отчёт не меняется, поэтому кэш держится без
+    срока, но битый файл в кэше жил бы вечно, поэтому кэш проверяется сигнатурой."""
     RAW.mkdir(parents=True, exist_ok=True)
     path = (
         RAW
         / f"minfin_{report.get('kind', 'state')}_{report['year']}_{report['months']:02d}.bin"
     )
-    if not (path.exists() and path.stat().st_size > 10_000):
-        card = api_json(f"{API}/{report['id']}")
-        files = [f for f in (card.get("full_text") or []) if f.get("document")]
-        if not files:
-            raise SourceError(f"у отчёта {report['id']} нет файла")
-        url = SITE + files[0]["document"]
-        result = subprocess.run(
-            ["curl", "-sL", "--max-time", "180", url, "-o", str(path)],
-            capture_output=True,
-        )
-        if result.returncode != 0 or path.stat().st_size < 10_000:
-            raise SourceError(f"{url}: curl вернул {result.returncode}")
-    return Workbook(path.read_bytes())
+    if path.exists():
+        raw = path.read_bytes()
+        if payload_problem(raw, "xlsx", 10_000) is None:
+            return Workbook(raw)
+        path.unlink(missing_ok=True)  # кэш испорчен прошлым сбоем источника
+    link = report.get("document") or card_document(report["id"])
+    return Workbook(download(SITE + link, path, min_size=10_000, expect="xlsx"))
 
 
 def report_layout(rows: list[list[str]]) -> tuple[int, int, int, int]:
@@ -391,6 +404,10 @@ def parse_report(book: Workbook) -> dict:
     if not total or not items:
         raise SourceError("в отчёте не нашлось налоговых поступлений")
     collected = sum(i["fact"] for i in items)
+    # Нулевой итог достижим: факт берётся как (fact or 0). Делить на него нельзя,
+    # а ZeroDivisionError мимо except в collect роняла весь прогон, а не отчёт.
+    if not total["fact"]:
+        raise SourceError("итог налоговых поступлений нулевой")
     if abs(collected - total["fact"]) / total["fact"] > 0.02:
         raise SourceError(
             f"разрез не сходится с итогом: {collected:.0f} против {total['fact']:.0f}"
@@ -443,7 +460,7 @@ def collect(kind: str, issues: list[str]) -> tuple[dict | None, list[dict]]:
         report = {**report, "kind": kind}
         try:
             parsed = parse_report(fetch_report(report))
-        except (SourceError, OSError) as exc:
+        except (SourceError, OSError, ArithmeticError) as exc:
             issues.append(
                 f"отчёт {kind} {report['year']}-{report['months']:02d}: {exc}"
             )
@@ -535,6 +552,17 @@ def main() -> None:
     for issue in data["issues"]:
         print(f"  проблема: {issue}")
     print(f"Записано: {dataset}")
+    # Уровень бюджета, которого нет ни свежим, ни прошлым, потерян целиком.
+    lost = [
+        name
+        for key, name in (
+            ("latest", "государственный бюджет"),
+            ("local", "местные бюджеты"),
+        )
+        if not data[key]
+    ]
+    if lost:
+        raise SystemExit(f"потеряны разделы целиком: {', '.join(lost)}")
 
 
 if __name__ == "__main__":

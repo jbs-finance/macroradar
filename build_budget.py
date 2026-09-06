@@ -21,9 +21,12 @@ from compare_block import COMPARE_STYLE
 from layout import (
     CTA_STYLE,
     HEADER_STYLE,
+    NO_DATA_STYLE,
     cta_block,
     dataset_jsonld,
+    issues_notice,
     meta_tags,
+    no_data,
     site_header,
 )
 from minfin_block import (
@@ -31,6 +34,7 @@ from minfin_block import (
     MINFIN_STYLE,
     OBLAST_STYLE,
     minfin_section,
+    oblast_section,
     period_label,
 )
 
@@ -79,15 +83,42 @@ def page_jsonld(minfin: dict | None, budget: dict | None, generated: datetime) -
     )
 
 
+def collect_issues(
+    minfin: dict | None, budget: dict | None, oblast: dict | None
+) -> list[str]:
+    """Чего не хватает в этом прогоне, с указанием источника.
+
+    Источников на странице три, и у каждого свой список пропусков. Без подписи
+    строки «Акмолинская: свежих отчётов нет» непонятно, чей это отчёт не нашёлся.
+    """
+    named = (
+        ("Минфин", minfin),
+        ("Комитет госдоходов", budget),
+        ("Области", oblast),
+    )
+    return [
+        f"{source}: {issue}"
+        for source, data in named
+        for issue in (data or {}).get("issues") or []
+    ]
+
+
 def build(
     minfin: dict | None = None,
     budget: dict | None = None,
     oblast: dict | None = None,
 ) -> str:
     generated = datetime.now()
-    if minfin and oblast:
-        minfin = {**minfin, "oblast": oblast}
     regions_html, drill_rules = budget_section(budget) if budget else ("", "")
+    regions_html = regions_html or no_data(
+        "помесячные поступления по областям от Комитета госдоходов не собрались"
+    )
+    minfin_html = minfin_section(minfin) or no_data(
+        "отчёт Министерства финансов об исполнении бюджета не собрался"
+    )
+    oblast_html = oblast_section(oblast) or no_data(
+        "ни один областной отчёт об исполнении бюджета не разобрался"
+    )
     latest = (minfin or {}).get("latest")
     period = (
         period_label(latest["year"], latest["months"]) if latest else "последний период"
@@ -111,11 +142,18 @@ def build(
         + OBLAST_STYLE
         + BUDGET_STYLE
         + COMPARE_STYLE
+        + NO_DATA_STYLE
         + BUDGET_PAGE_STYLE
         + drill_rules,
         title=headline(minfin),
         period=period,
-        minfin=minfin_section(minfin),
+        issues_block=issues_notice(
+            collect_issues(minfin, budget, oblast),
+            "<strong>Собралось не всё.</strong> Ниже перечислено, каких отчётов "
+            "не хватает в этом прогоне: их цифр на странице нет.",
+        ),
+        minfin=minfin_html,
+        oblast=oblast_html,
         regions=regions_html,
         generated_human=generated.strftime("%d.%m.%Y %H:%M"),
         generated_iso=generated.isoformat(timespec="seconds"),
@@ -144,8 +182,13 @@ TEMPLATE = """<!doctype html>
       <time datetime="{generated_iso}">{generated_human}</time></p>
   </header>
 
+  {issues_block}
+
   <main>
 {minfin}
+
+    <h2>Отчёты областей</h2>
+{oblast}
 
 {regions}
 
@@ -173,22 +216,17 @@ def main() -> None:
     budget_path = Path(sys.argv[3]) if len(sys.argv) > 3 else BUDGET
     oblast_path = Path(sys.argv[4]) if len(sys.argv) > 4 else OBLAST
 
-    minfin = None
-    if minfin_path.exists():
-        minfin = json.loads(minfin_path.read_text(encoding="utf-8"))
-        if not minfin.get("latest"):
-            minfin = None
-    budget = None
-    if budget_path.exists():
-        budget = json.loads(budget_path.read_text(encoding="utf-8"))
-        if not budget.get("dynamics"):
-            budget = None
+    # Файл читается целиком, даже если полезной части в нём нет: список issues
+    # лежит рядом с данными, и обнуление payload уносило бы вместе с ним причину,
+    # по которой на странице пусто. Пустой payload отрабатывают сами блоки.
+    def load(path: Path) -> dict | None:
+        if not path.exists():
+            return None
+        return json.loads(path.read_text(encoding="utf-8"))
 
-    oblast = None
-    if oblast_path.exists():
-        oblast = json.loads(oblast_path.read_text(encoding="utf-8"))
-        if not oblast.get("regions"):
-            oblast = None
+    minfin = load(minfin_path)
+    budget = load(budget_path)
+    oblast = load(oblast_path)
 
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(build(minfin, budget, oblast), encoding="utf-8")

@@ -392,7 +392,6 @@ def minfin_section(data: dict | None) -> str:
         "сводный план поступлений на отчётный период, а не годовой бюджет.</p>",
         plan_table(latest),
         levels_section(data),
-        oblast_section(data.get("oblast")),
     ]
     notes = [
         "<li>Помесячные суммы вычислены как разности накопительных отчётов: "
@@ -458,8 +457,13 @@ def is_tax_category(item: dict) -> bool:
 
 
 def income_split(income: list[dict]) -> dict:
-    """Доходы уровня: собственные, трансферты и всё остальное."""
-    total = sum(i["fact"] for i in income) or 1
+    """Доходы уровня: собственные, трансферты и всё остальное.
+
+    Ноль в total значит, что доходной части в отчёте не было. Подменять его
+    единицей нельзя: тогда «все доходы» печатаются как 1, а «прочие доходы»
+    получают ровно 100%, и пустота выглядит как настоящий разрез.
+    """
+    total = sum(i["fact"] for i in income)
     transfers = sum(i["fact"] for i in income if "рансферт" in i["name"])
     taxes = sum(i["fact"] for i in income if is_tax_category(i))
     return {
@@ -477,7 +481,10 @@ def level_card(title: str, subtitle: str, latest: dict) -> str:
     figures = [
         ("Налоги", fmt_num(total["fact"], 0)),
         ("Исполнение", f"{fmt_num(pct, 1)}%"),
-        ("Все доходы", fmt_num(split["total"], 0)),
+        (
+            "Все доходы",
+            fmt_num(split["total"], 0) if split["total"] else "нет данных",
+        ),
     ]
     body = "".join(
         f"<div><dt>{name}</dt><dd>{value}</dd></div>" for name, value in figures
@@ -487,12 +494,16 @@ def level_card(title: str, subtitle: str, latest: dict) -> str:
         ("other", split["other"], "прочие доходы"),
         ("transfer", split["transfers"], "трансферты"),
     ]
-    bar = "".join(
-        f'<i class="{cls}" style="width: {value / split["total"] * 100:.1f}%; '
-        f'animation-delay: {n * 0.08:.2f}s" title="{label}: '
-        f'{fmt_num(value / split["total"] * 100, 1)}%"></i>'
-        for n, (cls, value, label) in enumerate(shares)
-        if value > 0
+    bar = (
+        "".join(
+            f'<i class="{cls}" style="width: {value / split["total"] * 100:.1f}%; '
+            f'animation-delay: {n * 0.08:.2f}s" title="{label}: '
+            f'{fmt_num(value / split["total"] * 100, 1)}%"></i>'
+            for n, (cls, value, label) in enumerate(shares)
+            if value > 0
+        )
+        if split["total"]
+        else ""
     )
     return (
         f'<article class="lv-card"><h4>{title}</h4>'
@@ -514,13 +525,25 @@ def levels_section(data: dict) -> str:
         if state["total"]["fact"]
         else 0
     )
-    transfer_share = local_split["transfers"] / local_split["total"] * 100
+    # Ноль в доходах местных бюджетов это отсутствие разреза, а не бюджет без
+    # трансфертов: печатать «0,0% их доходов приходит трансфертами» как факт нельзя.
+    transfer_share = (
+        local_split["transfers"] / local_split["total"] * 100
+        if local_split["total"]
+        else None
+    )
+    transfers_phrase = (
+        f"а <b>{fmt_num(transfer_share, 1)}%</b> их доходов приходит трансфертами "
+        "из республиканского бюджета"
+        if transfer_share is not None
+        else "а доля трансфертов в их доходах не считается: доходной части "
+        "в отчёте нет"
+    )
     return "\n".join(
         [
             "<h3>Республика и места</h3>",
             '<p class="lede">Из всех собранных налогов местным бюджетам достаётся '
-            f"<b>{fmt_num(share_of_taxes, 1)}%</b>, а <b>{fmt_num(transfer_share, 1)}%</b> "
-            "их доходов приходит трансфертами из республиканского бюджета. "
+            f"<b>{fmt_num(share_of_taxes, 1)}%</b>, {transfers_phrase}. "
             f"Оба отчёта за {label}.</p>",
             '<div class="lv">'
             + level_card(
@@ -628,9 +651,16 @@ def oblast_row(region: dict) -> str:
             f"<span>только налоги{plan_note}</span>"
         )
     else:
+        # Краткая справка даёт две суммы без разреза доходов. Доля своих отсюда не
+        # выводится: налоги это не все собственные доходы. Раньше на месте, где у
+        # соседей стоит процент, печаталась сумма налогов, и читалась как доля.
         middle = '<span class="obl-mix partial"><i class="own" style="width: 100%"></i></span>'
         own = region.get("taxes")
-        note = f"своих {fmt_num(own, 0)} млрд" if own else "справкой, без разреза"
+        note = (
+            f"налогов {fmt_num(own, 0)} млрд, доля своих не считается"
+            if own
+            else "справкой, без разреза"
+        )
         figures = f'<b>{fmt_num(region["total"], 0)} млрд</b><span>{note}{plan_note}</span>'
 
     return (
@@ -652,16 +682,36 @@ def oblast_section(data: dict | None) -> str:
     if not regions:
         return ""
     full = sum(1 for r in regions if r.get("kind", "full") == "full")
+    # Отчёт за три месяца позапрошлого года и отчёт за восемь месяцев текущего
+    # стоят в одном порядке по сумме, но сравнивать их нечестно: разные периоды.
+    # Отставшие уходят вниз отдельным списком, чтобы не задавать ложный порядок.
+    current_year = max(r["year"] for r in regions)
+    current = [r for r in regions if r["year"] >= current_year]
+    lagging = [r for r in regions if r["year"] < current_year]
+    lagging_block = (
+        [
+            "<h4>Отчитались за прошлые годы</h4>",
+            '<p class="obl-note">Эти регионы отстали на год и больше. Их суммы '
+            "охватывают другой период, поэтому в общий порядок выше они не "
+            "поставлены: место в нём ничего бы не значило.</p>",
+            f'<div class="obl">{"".join(oblast_row(r) for r in lagging)}</div>',
+        ]
+        if lagging
+        else []
+    )
     return "\n".join(
         [
             "<h3>Свежие отчёты областей</h3>",
             '<p class="lede">Каждое областное управление финансов публикует своё '
             "исполнение бюджета отдельно и в свой срок. Полоса показывает, какую долю "
             "доходов регион собирает сам, а какую получает трансфертами.</p>",
-            f'<div class="obl">{"".join(oblast_row(r) for r in regions)}</div>',
+            f'<div class="obl">{"".join(oblast_row(r) for r in current)}</div>',
             '<p class="obl-legend"><span><i class="own"></i>свои доходы</span>'
             '<span><i class="transfer"></i>трансферты</span>'
             '<span><i class="partial"></i>разрез не опубликован</span></p>',
+        ]
+        + lagging_block
+        + [
             f'<p class="obl-note">Отчёт нашёлся у '
             f"{plural(len(regions), 'региона', 'регионов', 'региона')} из двадцати, "
             f"со структурой доходов у {plural(full, 'региона', 'регионов', 'региона')}. "

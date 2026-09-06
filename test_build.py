@@ -198,3 +198,206 @@ class TestFxTable:
         )
         assert 'class="fx"' in page
         assert "Нажмите на валюту" in page
+
+
+class TestNoDataIsVisible:
+    """Отсутствие данных обязано быть видно на странице.
+
+    Регресс, который эти тесты ловят: секция возвращает пустую строку, её заголовок
+    остаётся в шаблоне, и читатель видит заголовок над пустотой. Либо на месте
+    отсутствующих данных печатается ноль, неотличимый от настоящего нуля.
+    """
+
+    def test_no_data_names_the_reason(self):
+        from layout import no_data
+
+        markup = no_data("отчёт не собрался")
+        assert "Данные не собрались" in markup
+        assert "отчёт не собрался" in markup
+
+    def test_no_data_escapes_reason(self):
+        from layout import no_data
+
+        assert "<script>" not in no_data("<script>x")
+
+    def test_issues_notice_lists_every_issue(self):
+        from layout import issues_notice
+
+        markup = issues_notice(["первое", "второе"])
+        assert markup.count("<li>") == 2
+        assert 'class="notice"' in markup
+
+    def test_issues_notice_empty_without_issues(self):
+        from layout import issues_notice
+
+        assert issues_notice([]) == ""
+        assert issues_notice(None) == ""
+
+    def test_budget_page_without_data_explains_itself(self):
+        from build_budget import build as build_budget
+
+        page = build_budget(None, None, None)
+        body = re.search(r"(?s)<main>(.*)</main>", page).group(1)
+        assert body.count("Данные не собрались") == 3
+        assert len(body) > 900
+
+    def test_budget_page_shows_issues_of_every_source(self):
+        from build_budget import build as build_budget
+
+        page = build_budget(
+            {"issues": ["отчёт за май не найден"]},
+            {"issues": ["файл КГД пуст"]},
+            {"issues": ["Акмолинская: свежих отчётов нет"]},
+        )
+        assert "Минфин: отчёт за май не найден" in page
+        assert "Комитет госдоходов: файл КГД пуст" in page
+        assert "Области: Акмолинская: свежих отчётов нет" in page
+
+    def test_oblast_survives_without_minfin(self):
+        """Свои данные области целы: они не должны исчезать вместе с Минфином."""
+        from build_budget import build as build_budget
+
+        oblast = {
+            "regions": [
+                {
+                    "name": "Костанайская",
+                    "kind": "full",
+                    "year": 2026,
+                    "months": 7,
+                    "total": 100.0,
+                    "taxes": 60.0,
+                    "transfers": 20.0,
+                    "pct": None,
+                }
+            ]
+        }
+        page = build_budget(None, None, oblast)
+        assert "Костанайская" in page
+        assert "Свежие отчёты областей" in page
+
+
+class TestFreshnessByAge:
+    """Бейдж свежести смотрит и на возраст последней точки, не только на факт забора."""
+
+    def test_thresholds_are_named_constants(self):
+        from layout import MAX_AGE_DAYS
+
+        assert MAX_AGE_DAYS == {"D": 7, "M": 60, "Q": 150, "A": 500}
+
+    def test_annual_series_two_years_back_is_outdated(self):
+        from layout import freshness_badge
+
+        badge = freshness_badge("2024", "A", False, date(2026, 9, 6))
+        assert "устарело: 2024" in badge
+
+    def test_annual_series_last_year_stays_fresh(self):
+        from layout import freshness_badge
+
+        assert "badge-fresh" in freshness_badge("2025", "A", False, date(2026, 9, 6))
+
+    def test_daily_series_week_old_is_outdated(self):
+        from layout import freshness_badge
+
+        badge = freshness_badge("2026-08-20", "D", False, date(2026, 9, 6))
+        assert "устарело: 2026-08-20" in badge
+
+    def test_monthly_series_last_month_stays_fresh(self):
+        from layout import freshness_badge
+
+        assert "badge-fresh" in freshness_badge(
+            "2026-08", "M", False, date(2026, 9, 6)
+        )
+
+    def test_failed_fetch_still_wins(self):
+        from layout import freshness_badge
+
+        assert "данные устарели" in freshness_badge(
+            "2026-09-05", "D", True, date(2026, 9, 6)
+        )
+
+    def test_unparsable_date_does_not_flag(self):
+        from layout import freshness_badge
+
+        assert "badge-fresh" in freshness_badge("не дата", "A", False, date(2026, 9, 6))
+
+    def test_with_freshness_rewrites_card_badge(self):
+        from layout import with_freshness
+
+        markup = '<span class="badge badge-fresh">актуально</span>'
+        series = {"freq": "A", "obs": [{"date": "2024", "value": 1.0}], "stale": False}
+        assert "устарело: 2024" in with_freshness(markup, series, date(2026, 9, 6))
+
+
+class TestZeroIsNotData:
+    """Ноль не должен быть неотличим от настоящего нуля."""
+
+    def test_empty_income_does_not_become_one(self):
+        from minfin_block import income_split
+
+        assert income_split([])["total"] == 0
+
+    def test_level_card_says_no_data_instead_of_one(self):
+        from minfin_block import level_card
+
+        latest = {"total": {"fact": 10.0, "plan": 10.0, "pct": 100.0}, "income": []}
+        markup = level_card("Тест", "подпись", latest)
+        assert "нет данных" in markup
+        assert "прочие доходы: 100,0%" not in markup
+
+    def test_empty_year_shows_no_data_not_zero(self):
+        from budget_block import series_stats
+
+        markup = series_stats([None] * 12, [None] * 12, None)
+        assert markup.count("нет данных") == 2
+        assert ">0<" not in markup
+
+    def test_empty_chart_is_marked(self):
+        from budget_block import chart_svg
+
+        svg = chart_svg([None] * 12, [None] * 12, "пусто", 2024, None)
+        assert "нет данных за этот период" in svg
+
+
+class TestLaggingRegions:
+    """Регион, отставший на год, не стоит в одном порядке со свежими."""
+
+    def region(self, name, year, total):
+        return {
+            "name": name,
+            "kind": "full",
+            "year": year,
+            "months": 3,
+            "total": total,
+            "taxes": total * 0.6,
+            "transfers": total * 0.2,
+            "pct": None,
+        }
+
+    def test_older_year_moves_to_separate_list(self):
+        from minfin_block import oblast_section
+
+        markup = oblast_section(
+            {
+                "regions": [
+                    self.region("Свежая", 2026, 300.0),
+                    self.region("Отставшая", 2025, 200.0),
+                ]
+            }
+        )
+        assert "Отчитались за прошлые годы" in markup
+        head, tail = markup.split("Отчитались за прошлые годы")
+        assert "Свежая" in head and "Отставшая" not in head
+        assert "Отставшая" in tail
+
+    def test_all_current_years_keep_one_list(self):
+        from minfin_block import oblast_section
+
+        markup = oblast_section(
+            {
+                "regions": [
+                    self.region("Первая", 2026, 300.0),
+                    self.region("Вторая", 2026, 200.0),
+                ]
+            }
+        )
+        assert "Отчитались за прошлые годы" not in markup

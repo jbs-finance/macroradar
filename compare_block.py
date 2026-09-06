@@ -15,6 +15,7 @@ import html
 
 from budget_block import MONTH_CASE, build_series
 from build_pulse import fmt_num
+from minfin_block import plural
 
 SPARK_W = 78
 SPARK_H = 20
@@ -222,7 +223,11 @@ def note_growth(items: list[dict]) -> str:
         f"({'+' if best['growth'] > 0 else ''}{fmt_num(best['growth'], 1)}%), "
         f"слабее всех <b>{html.escape(worst['name'])}</b> "
         f"({'+' if worst['growth'] > 0 else ''}{fmt_num(worst['growth'], 1)}%). "
-        f"В плюсе <b>{grew}</b> регионов из {len(known)}. "
+        # В разбивке КГД не только регионы: там же строка центрального аппарата.
+        # Пока их всех называли регионами, подпись спорила с областным блоком,
+        # где регионов ровно двадцать.
+        f"В плюсе <b>{grew}</b> "
+        f"из {plural(len(known), 'позиции', 'позиций', 'позиций')} разбивки. "
         f"Сравниваются {months} месяцев, закрытых в обоих годах."
     )
 

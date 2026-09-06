@@ -9,13 +9,13 @@ from build_radar import build, range_markup
 from etl import Obs, Series, SourceError
 from radar import (
     calendar_events,
-    parse_business_activity,
-    signal_business_activity,
     fx_events,
     inflation_events,
+    parse_business_activity,
     parse_inflation_page,
     parse_rate_table,
     rate_events,
+    signal_business_activity,
     signal_inflation,
     signal_rate,
     signal_wage,
@@ -96,7 +96,6 @@ class TestInflationPage:
         assert p["nonfood"] == pytest.approx(11.4)
         assert p["services"] == pytest.approx(8.9)
 
-
     def test_monthly_first_wording_is_not_confused_with_yearly(self):
         """Июль 2025: первым идёт месячный уровень, годовой дальше по фразе."""
         page = (
@@ -114,11 +113,16 @@ class TestInflationPage:
         assert p["services"] == pytest.approx(14.9)
 
     def test_older_wording_with_za_god(self):
-        page = ("<p>Ключевые моменты 8.5% Инфляция в Республике Казахстан в октябре 2024 года "
-                "ускорилась, за год составила 8,5% (в сентябре 2024г. 8,3%), за месяц 0,9%.</p>")
+        page = (
+            "<p>Ключевые моменты 8.5% Инфляция в Республике Казахстан в октябре 2024 года "
+            "ускорилась, за год составила 8,5% (в сентябре 2024г. 8,3%), за месяц 0,9%.</p>"
+        )
         p = parse_inflation_page(page)
-        assert p["month"] == "2024-10" and p["yoy"] == pytest.approx(8.5) and p["mom"] == pytest.approx(0.9)
-
+        assert (
+            p["month"] == "2024-10"
+            and p["yoy"] == pytest.approx(8.5)
+            and p["mom"] == pytest.approx(0.9)
+        )
 
     def test_page_without_key_phrase_raises(self):
         with pytest.raises(SourceError):
@@ -396,11 +400,21 @@ class TestPage:
         radar = self.radar()
         radar["neighbours"] = [
             {
-                "id": "inflation", "name_ru": "Инфляция", "unit": "% за год", "digits": 1,
-                "lower_is_better": True, "source": "World Bank", "fetched_at": "2026-09-04T06:00:00+00:00",
+                "id": "inflation",
+                "name_ru": "Инфляция",
+                "unit": "% за год",
+                "digits": 1,
+                "lower_is_better": True,
+                "source": "World Bank",
+                "fetched_at": "2026-09-04T06:00:00+00:00",
                 "items": [
                     {"country": "Китай", "value": 0.06, "year": "2025", "is_kz": False},
-                    {"country": "Казахстан", "value": 11.4, "year": "2025", "is_kz": True},
+                    {
+                        "country": "Казахстан",
+                        "value": 11.4,
+                        "year": "2025",
+                        "is_kz": True,
+                    },
                 ],
             }
         ]
@@ -418,3 +432,48 @@ class TestPage:
         markup = range_markup(series, 2)
         pos = float(re.search(r"left: ([\d.]+)%", markup).group(1))
         assert 0 <= pos <= 100
+
+
+class TestRateRubrics:
+    PAGE = (
+        '<a class="tab-nav__link" href="/ru/news/x/rubrics/2490">2027</a>'
+        '<a class="tab-nav__link" href="/ru/news/x/rubrics/2365">2026</a>'
+    )
+
+    def test_new_year_picked_up_from_page(self, monkeypatch):
+        """Список рубрик захардкожен по 2026 год: в 2027 новый год просто не
+        запрашивался бы, а обрыв заметил бы только гейт свежести, спустя месяцы."""
+        import radar
+
+        monkeypatch.setattr(radar, "fetch", lambda url, name: self.PAGE.encode())
+        rubrics = radar.rate_rubrics(date(2027, 3, 1))
+        assert rubrics[2027] == 2490
+        assert rubrics[2026] == 2365
+
+    def test_falls_back_to_known_list_when_page_is_down(self, monkeypatch):
+        import radar
+
+        def down(url, name):
+            raise SourceError("страница недоступна")
+
+        monkeypatch.setattr(radar, "fetch", down)
+        rubrics = radar.rate_rubrics(date(2026, 3, 1))
+        assert rubrics[2026] == radar.RATE_RUBRICS[2026]
+        assert len(rubrics) == radar.RATE_YEARS
+
+
+class TestCalendarProblems:
+    def test_unavailable_calendar_is_reported_not_swallowed(self, monkeypatch):
+        """Молча опустевший календарь неотличим от недели без публикаций."""
+        import radar
+
+        def down(*args, **kwargs):
+            raise SourceError("502")
+
+        monkeypatch.setattr(radar, "fetch", down)
+        monkeypatch.setattr(radar, "fetch_calendar_day", down)
+        problems: list[str] = []
+        events = radar.fetch_upcoming(date(2026, 9, 6), [], problems)
+        assert events == []
+        assert len(problems) == 2
+        assert all("календарь релизов" in p for p in problems)
