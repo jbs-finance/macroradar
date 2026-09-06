@@ -1,6 +1,7 @@
 """Тесты разбора файлов КГД и блока поступлений на странице налогов."""
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -220,6 +221,14 @@ def test_chart_svg_marks_year_in_tooltip():
     assert "январь 2024" in svg
     assert "январь 2023" in svg
     assert svg.count("<rect") == 3  # у февраля прошлого года данных нет
+
+
+def test_chart_svg_draws_negative_month_below_zero():
+    """Месяц с возвратом из бюджета: rect с отрицательной высотой браузер не рисует."""
+    svg = chart_svg([10.0, 8.0], [9.0, -3.5], "тест", 2026, 2025)
+    heights = [float(h) for h in re.findall(r'height="(-?[\d.]+)"', svg)]
+    assert heights and all(h > 0 for h in heights)
+    assert ">-5<" in svg or ">-4<" in svg  # ось расширена вниз до нуля и ниже
 
 
 def test_chart_svg_survives_empty_series():

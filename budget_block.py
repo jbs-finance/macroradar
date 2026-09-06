@@ -162,10 +162,16 @@ def chart_svg(
     """Сгруппированные столбики: бледный прошлый год, насыщенный текущий."""
     points = [v for v in list(values) + list(prev) if v]
     top = max(points) if points else 1
-    step = nice_step(top)
+    # Месяц с возвратом из бюджета даёт минус. Без места под него высота столбика
+    # получалась отрицательной, браузер такой rect не рисует и ругается в консоль.
+    low = min(min(points), 0.0) if points else 0.0
+    step = nice_step(max(top, abs(low)))
     top = step * (int(top / step) + 1)
+    bottom = -step * (int(-low / step) + 1) if low < 0 else 0.0
+    span = top - bottom
     inner_w = CHART_W - PAD_L - PAD_R
     inner_h = CHART_H - PAD_T - PAD_B
+    zero_y = PAD_T + inner_h - (0.0 - bottom) / span * inner_h
     group = inner_w / 12
     bar = group * 0.34
 
@@ -173,9 +179,9 @@ def chart_svg(
         f'<svg class="chart" viewBox="0 0 {CHART_W} {CHART_H}" role="img" '
         f'aria-label="{html.escape(label)}">'
     ]
-    line = 0.0
+    line = bottom
     while line <= top + 1e-9:
-        y = PAD_T + inner_h - line / top * inner_h
+        y = PAD_T + inner_h - (line - bottom) / span * inner_h
         parts.append(
             f'<line class="grid" x1="{PAD_L}" y1="{y:.1f}" x2="{CHART_W - PAD_R}" y2="{y:.1f}"/>'
         )
@@ -198,8 +204,8 @@ def chart_svg(
             value = series[i] if i < len(series) else None
             if not value:
                 continue
-            height = value / top * inner_h
-            y = PAD_T + inner_h - height
+            height = abs(value) / span * inner_h
+            y = zero_y - height if value > 0 else zero_y
             delay = i * 0.03
             parts.append(
                 f'<rect class="bar-{kind}" x="{x0 + offset:.1f}" y="{y:.1f}" '
