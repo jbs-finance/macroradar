@@ -56,7 +56,9 @@ def parse_assets(payload: object, today: date) -> list[dict]:
         except (TypeError, ValueError):
             continue
         if not 1 <= value <= 300:
-            raise SourceError(f"НБРК: активы {value:.2f} млрд USD вне ожидаемого диапазона")
+            raise SourceError(
+                f"НБРК: активы {value:.2f} млрд USD вне ожидаемого диапазона"
+            )
         points[stamp] = value
     eligible = [
         (stamp, value)
@@ -67,9 +69,7 @@ def parse_assets(payload: object, today: date) -> list[dict]:
         raise SourceError("НБРК: нет точек до текущего месяца")
     start = history_start(eligible[-1][0])
     result = [
-        {"date": stamp, "value": value}
-        for stamp, value in eligible
-        if stamp >= start
+        {"date": stamp, "value": value} for stamp, value in eligible if stamp >= start
     ]
     if len(result) < 96:
         raise SourceError(f"НБРК: в 10-летнем окне только {len(result)} месячных точек")
@@ -80,7 +80,12 @@ def parse_returns(markup: str, start_year: int) -> list[dict]:
     """Берёт первый процент из строк годовой таблицы доходности НБРК."""
     result = []
     for row in re.findall(r"<tr[^>]*>(.*?)</tr>", markup, re.DOTALL | re.IGNORECASE):
-        cells = [_plain(cell) for cell in re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", row, re.DOTALL | re.IGNORECASE)]
+        cells = [
+            _plain(cell)
+            for cell in re.findall(
+                r"<t[dh][^>]*>(.*?)</t[dh]>", row, re.DOTALL | re.IGNORECASE
+            )
+        ]
         if len(cells) < 2 or not re.fullmatch(r"\d{4}\*?", cells[0]):
             continue
         year = int(cells[0][:4])
@@ -89,7 +94,9 @@ def parse_returns(markup: str, start_year: int) -> list[dict]:
             continue
         value = float(match.group(1).replace(",", "."))
         if not -100 <= value <= 100:
-            raise SourceError(f"НБРК: доходность {value:.2f}% за {year} вне ожидаемого диапазона")
+            raise SourceError(
+                f"НБРК: доходность {value:.2f}% за {year} вне ожидаемого диапазона"
+            )
         result.append({"date": str(year), "value": value})
     if len(result) < 8:
         raise SourceError(f"НБРК: в таблице доходности только {len(result)} точек")
@@ -119,14 +126,18 @@ def build(dataset: Path = DEFAULT_DATASET, today: date | None = None) -> dict:
         }
     )
     try:
-        payload = json.loads(fetch(f"{ASSETS_RECORDS_URL}?{query}", "national_fund_assets.json"))
+        payload = json.loads(
+            fetch(f"{ASSETS_RECORDS_URL}?{query}", "national_fund_assets.json")
+        )
         assets = parse_assets(payload, today)
     except (SourceError, json.JSONDecodeError) as exc:
         assets = previous.get("assets") or []
         assets_stale = bool(assets)
         issues.append(f"активы НБРК не обновились ({exc})")
     try:
-        markup = fetch(RETURNS_URL, "national_fund_returns.html").decode("utf-8", "ignore")
+        markup = fetch(RETURNS_URL, "national_fund_returns.html").decode(
+            "utf-8", "ignore"
+        )
         returns = parse_returns(markup, today.year - HISTORY_YEARS)
     except SourceError as exc:
         returns = previous.get("returns") or []
@@ -155,7 +166,12 @@ def build(dataset: Path = DEFAULT_DATASET, today: date | None = None) -> dict:
 
 def main() -> None:
     dataset = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_DATASET
-    data = build(dataset)
+    try:
+        data = build(dataset)
+    except SourceError as exc:
+        # Ряд, которого нет ни свежим, ни сохранённым, потерян целиком: выходим
+        # ненулевым кодом, а не пишем файл с дырой.
+        raise SystemExit(str(exc)) from exc
     dataset.parent.mkdir(parents=True, exist_ok=True)
     dataset.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"Нацфонд: активов {len(data['assets'])}, доходностей {len(data['returns'])}")

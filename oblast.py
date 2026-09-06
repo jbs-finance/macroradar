@@ -22,19 +22,17 @@ from __future__ import annotations
 import io
 import json
 import re
-import subprocess
 import sys
-import urllib.error
-import urllib.request
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
-
-from budget import SourceError, as_number
-from budget import Workbook as XlsxBook
-from minfin import MONTHS_RU, parse_income, report_layout
 from struct import error as struct_error
 
+from budget import SourceError, as_number, payload_problem
+from budget import Workbook as XlsxBook
+from budget import download as fetch_document
+from etl import fetch_json
+from minfin import MONTHS_RU, parse_income, report_layout
 from xls import Workbook as XlsBook
 from xls import XlsError
 
@@ -89,13 +87,17 @@ MIN_CATEGORIES = 3  # разобрана хотя бы половина кате
 MAX_AGE_MONTHS = 18  # отчёт старше полутора лет уже не «свежая картина»
 MAX_CANDIDATES = 6  # сколько документов региона пробовать, прежде чем сдаться
 
+# Списки документов gov.kz весят десятки мегабайт: в поле full_text лежит
+# полный текст каждой карточки. Общий потолок ответа их обрезает, а обрезанный
+# JSON выглядит как битый источник.
+LISTING_MAX_BODY = 128 * 1024 * 1024
+
 
 def api_json(url: str, timeout: int = 45):
-    try:
-        with urllib.request.urlopen(url, timeout=timeout) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except (urllib.error.URLError, json.JSONDecodeError, TimeoutError, OSError) as exc:
-        raise SourceError(f"{url}: {exc}") from exc
+    """Список документов управления. Ретраи обязательны: обход идёт по 24 региона
+    в восемь страниц одиночными запросами, и одна сетевая икота без повтора
+    выбрасывала регион целиком."""
+    return fetch_json(url, timeout=timeout, max_body=LISTING_MAX_BODY)
 
 
 def parse_period(title: str) -> tuple[int, int] | None:
@@ -169,27 +171,23 @@ def region_reports(slug: str) -> list[dict]:
 
 
 def download(slug: str, report: dict) -> bytes:
+    """Вложение отчёта. Кэш здесь бессрочный, поэтому проверяется сигнатурой: тело
+    страницы ошибки, попавшее в raw/, жило бы там и после того, как сайт ожил."""
     RAW.mkdir(parents=True, exist_ok=True)
     # В имени нужен идентификатор документа: за один месяц управление выкладывает
     # и таблицу, и справку, и презентацию, а кэш по месяцу оставлял только первую.
-    path = RAW / f"oblast_{slug}_{report['year']}_{report['months']:02d}_{report['id']}.bin"
-    if path.exists() and path.stat().st_size > 3000:
-        return path.read_bytes()
-    result = subprocess.run(
-        [
-            "curl",
-            "-sL",
-            "--max-time",
-            "180",
-            SITE + report["document"],
-            "-o",
-            str(path),
-        ],
-        capture_output=True,
+    path = (
+        RAW
+        / f"oblast_{slug}_{report['year']}_{report['months']:02d}_{report['id']}.bin"
     )
-    if result.returncode != 0 or not path.exists() or path.stat().st_size < 3000:
-        raise SourceError(f"curl вернул {result.returncode}")
-    return path.read_bytes()
+    if path.exists():
+        raw = path.read_bytes()
+        if payload_problem(raw, "document", 3000) is None:
+            return raw
+        path.unlink(missing_ok=True)  # кэш испорчен прошлым сбоем источника
+    return fetch_document(
+        SITE + report["document"], path, min_size=3000, expect="document"
+    )
 
 
 def books(raw: bytes):
@@ -247,7 +245,9 @@ PRESENTATION_INCOME = re.compile(PRESENTATION_NUMBER + r"\s+ДОХОДЫ\b", re.
 PRESENTATION_TAXES = re.compile(
     r"Налоговые\s+поступления\s+" + PRESENTATION_NUMBER, re.IGNORECASE
 )
-PRESENTATION_TRANSFERS = re.compile(r"Трансферты\s+" + PRESENTATION_NUMBER, re.IGNORECASE)
+PRESENTATION_TRANSFERS = re.compile(
+    r"Трансферты\s+" + PRESENTATION_NUMBER, re.IGNORECASE
+)
 PRESENTATION_MILLIONS = re.compile(r"МЛН\.?\s*ТЕНГЕ", re.IGNORECASE)
 
 
@@ -487,6 +487,10 @@ def main() -> None:
     for issue in data["issues"]:
         print(f"  проблема: {issue}")
     print(f"Записано: {dataset}")
+    # Отдельная область без отчёта это норма источника, а вот пустой раздел
+    # означает, что не работает сам обход, и такую сборку публиковать нельзя.
+    if not data["regions"]:
+        raise SystemExit("не собран ни один регион: раздел областей потерян целиком")
 
 
 if __name__ == "__main__":

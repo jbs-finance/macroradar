@@ -301,7 +301,9 @@ def word_document(text: str) -> bytes:
     body = "".join(f"<w:t>{part}</w:t>" for part in text.split(" "))
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
-        archive.writestr("word/document.xml", f"<w:document><w:p>{body}</w:p></w:document>")
+        archive.writestr(
+            "word/document.xml", f"<w:document><w:p>{body}</w:p></w:document>"
+        )
     return buffer.getvalue()
 
 
@@ -389,7 +391,9 @@ def test_parse_word_report_rejects_implausible_ratio():
 def test_summarize_marks_partial_form():
     """Если в отчёте только налоги, это не доходы региона."""
     report = {"year": 2026, "months": 7, "published": "2026-08-11", "id": 1}
-    only_taxes = [{"code": "1", "name": "Налоговые поступления", "plan": 60.0, "fact": 61.0}]
+    only_taxes = [
+        {"code": "1", "name": "Налоговые поступления", "plan": 60.0, "fact": 61.0}
+    ]
     summary = summarize(only_taxes, "Жетысу", report, "zhetysu-finance")
     assert summary["kind"] == "taxes"
     assert summary["own_share"] is None
@@ -398,22 +402,126 @@ def test_summarize_marks_partial_form():
 def test_oblast_row_shapes_by_kind():
     from minfin_block import oblast_row
 
-    base = {"name": "Тест", "year": 2026, "months": 7, "total": 100.0, "taxes": 60.0,
-            "transfers": 20.0, "pct": 98.0}
+    base = {
+        "name": "Тест",
+        "year": 2026,
+        "months": 7,
+        "total": 100.0,
+        "taxes": 60.0,
+        "transfers": 20.0,
+        "pct": 98.0,
+    }
     assert "своих 80%" in oblast_row({**base, "kind": "full"})
     assert "только налоги" in oblast_row({**base, "kind": "taxes"})
-    assert "своих 60 млрд" in oblast_row({**base, "kind": "brief"})
+    # Краткая справка не даёт разреза доходов: на месте, где у полной формы стоит
+    # доля, должна стоять названная сумма налогов, а не число, читаемое как процент.
+    brief = oblast_row({**base, "kind": "brief"})
+    assert "налогов 60 млрд" in brief
+    assert "доля своих не считается" in brief
 
 
 def test_oblast_section_counts_full_forms():
     data = {
         "regions": [
-            {"name": "А", "kind": "full", "year": 2026, "months": 7, "total": 100.0,
-             "taxes": 60.0, "transfers": 20.0, "pct": 98.0},
-            {"name": "Б", "kind": "taxes", "year": 2026, "months": 7, "total": 50.0,
-             "taxes": 50.0, "transfers": 0.0, "pct": None},
+            {
+                "name": "А",
+                "kind": "full",
+                "year": 2026,
+                "months": 7,
+                "total": 100.0,
+                "taxes": 60.0,
+                "transfers": 20.0,
+                "pct": 98.0,
+            },
+            {
+                "name": "Б",
+                "kind": "taxes",
+                "year": 2026,
+                "months": 7,
+                "total": 50.0,
+                "taxes": 50.0,
+                "transfers": 0.0,
+                "pct": None,
+            },
         ]
     }
     html = oblast_section(data)
     assert "2 региона из двадцати" in html
     assert "структурой доходов у 1 региона" in html
+
+
+# --- Устойчивость обхода -------------------------------------------------------
+
+
+def test_download_drops_poisoned_cache(monkeypatch, tmp_path):
+    """Кэш вложений бессрочный: тело страницы ошибки жило бы в нём вечно."""
+    import oblast
+
+    report = {"year": 2026, "months": 7, "id": 42, "document": "/uploads/report.bin"}
+    path = tmp_path / "oblast_test_2026_07_42.bin"
+    path.write_bytes(b"<!DOCTYPE html><html>" + b"z" * 9000)
+    monkeypatch.setattr(oblast, "RAW", tmp_path)
+    monkeypatch.setattr(
+        oblast,
+        "fetch_document",
+        lambda url, p, min_size=1000, expect="document", timeout=180: (
+            b"PK\x03\x04" + b"0" * 9000
+        ),
+    )
+    assert oblast.download("test", report).startswith(b"PK")
+
+
+def test_download_reuses_good_cache(monkeypatch, tmp_path):
+    import oblast
+
+    report = {"year": 2026, "months": 7, "id": 42, "document": "/uploads/report.bin"}
+    path = tmp_path / "oblast_test_2026_07_42.bin"
+    path.write_bytes(b"PK\x03\x04" + b"c" * 9000)
+    monkeypatch.setattr(oblast, "RAW", tmp_path)
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("годный кэш не должен перекачиваться")
+
+    monkeypatch.setattr(oblast, "fetch_document", refuse)
+    assert oblast.download("test", report).endswith(b"c" * 100)
+
+
+def test_region_listing_survives_single_network_hiccup(monkeypatch):
+    """Обход идёт по 24 региона в восемь страниц одиночными запросами: без ретрая
+    одна сетевая икота выбрасывала регион целиком."""
+    import json
+
+    import etl
+    import oblast
+
+    listing = [
+        {
+            "id": 7,
+            "title": "Отчет об исполнении бюджета на 1 августа 2026 года",
+            "created_date": "2026-08-05",
+            "full_text": [{"document": "/uploads/report.bin"}],
+        }
+    ]
+    calls = {"n": 0}
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self, *args):
+            return json.dumps(listing).encode()
+
+    def flaky(request, timeout=None, context=None):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise ConnectionResetError("сброс соединения")
+        return Response()
+
+    monkeypatch.setattr(etl, "RETRY_PAUSE", 0)
+    monkeypatch.setattr(etl.urllib.request, "urlopen", flaky)
+    found = oblast.region_reports("aqmola-karzhy")
+    assert calls["n"] == 2
+    assert found[0]["id"] == 7

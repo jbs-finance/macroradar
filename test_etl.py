@@ -1,5 +1,6 @@
 """Тесты разбора источников и гейтов публикации. Сеть не требуется."""
 
+import urllib.error
 from datetime import date, timedelta
 
 import pytest
@@ -9,8 +10,10 @@ from etl import (
     Series,
     SourceError,
     month_points,
+    coverage_gap,
     parse_nbk_xml,
     parse_worldbank,
+    retriable,
     validate,
 )
 
@@ -124,3 +127,39 @@ class TestMonthPoints:
     def test_year_boundary_crossed_correctly(self):
         points = month_points(3, date(2026, 2, 15))
         assert points[:3] == [date(2025, 12, 1), date(2026, 1, 1), date(2026, 2, 1)]
+
+
+class TestRetryPolicy:
+    def test_not_found_is_not_retried(self):
+        """404 повтором не лечится, а лишние попытки стоят минут на обходе."""
+        exc = urllib.error.HTTPError("u", 404, "no", {}, None)
+        assert retriable(exc) is False
+
+    def test_rate_limit_and_server_error_are_retried(self):
+        assert retriable(urllib.error.HTTPError("u", 429, "slow", {}, None)) is True
+        assert retriable(urllib.error.HTTPError("u", 503, "down", {}, None)) is True
+
+    def test_network_error_is_retried(self):
+        assert retriable(ConnectionResetError("сброс")) is True
+
+
+class TestCoverageGap:
+    def test_full_series_has_no_note(self):
+        assert coverage_gap(37, 37) is None
+
+    def test_short_series_is_marked(self):
+        note = coverage_gap(3, 37)
+        assert note and "3" in note and "37" in note
+
+    def test_no_expectation_no_claim(self):
+        assert coverage_gap(0, 0) is None
+
+
+class TestFixedToday:
+    def test_validate_uses_given_date_not_clock(self):
+        """Дата приходит снаружи: прогон через полночь не должен менять вердикт."""
+        obs = [Obs(date="2026-09-01", value=460.0)]
+        fresh = validate(series(obs, freq="D"), {"min": 1, "max": 2000}, date(2026, 9, 5))
+        stale = validate(series(obs, freq="D"), {"min": 1, "max": 2000}, date(2026, 12, 5))
+        assert fresh == []
+        assert any("старше" in p for p in stale)

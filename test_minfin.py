@@ -117,7 +117,9 @@ def test_parse_report_ignores_deeper_levels():
 
 def test_parse_report_rejects_mismatch():
     rows = report_rows()
-    tax_row = next(r for r in rows if r[1:7] == ["", "Подоходный налог", "", "", "", ""])
+    tax_row = next(
+        r for r in rows if r[1:7] == ["", "Подоходный налог", "", "", "", ""]
+    )
     tax_row[10] = money(600)
     tax_row[11] = money(500)
     with pytest.raises(Exception):
@@ -381,6 +383,7 @@ def test_page_dataset_names_both_sources():
 
 def income_rows() -> list[list[str]]:
     """Категории доходов, а следом функциональные группы затрат."""
+
     def row(code, level, name, plan, fact):
         # Процент считается из плана и факта: разбор ищет колонку исполнения именно
         # по совпадению с ним.
@@ -440,8 +443,18 @@ def test_income_split_separates_transfers():
 def sample_with_local() -> dict:
     data = sample_minfin()
     data["latest"]["income"] = [
-        {"code": "1", "name": "Налоговые поступления", "fact": 14112.0, "plan": 14690.0},
-        {"code": "5", "name": "Поступления трансфертов", "fact": 1400.0, "plan": 1400.0},
+        {
+            "code": "1",
+            "name": "Налоговые поступления",
+            "fact": 14112.0,
+            "plan": 14690.0,
+        },
+        {
+            "code": "5",
+            "name": "Поступления трансфертов",
+            "fact": 1400.0,
+            "plan": 1400.0,
+        },
     ]
     data["local"] = {
         "year": 2026,
@@ -451,9 +464,24 @@ def sample_with_local() -> dict:
         "total": {"plan": 5170.0, "fact": 4764.0, "pct": 92.1},
         "items": [],
         "income": [
-            {"code": "1", "name": "Налоговые поступления", "fact": 4764.0, "plan": 5170.0},
-            {"code": "2", "name": "Неналоговые поступления", "fact": 479.0, "plan": 430.0},
-            {"code": "5", "name": "Поступления трансфертов", "fact": 3620.0, "plan": 3617.0},
+            {
+                "code": "1",
+                "name": "Налоговые поступления",
+                "fact": 4764.0,
+                "plan": 5170.0,
+            },
+            {
+                "code": "2",
+                "name": "Неналоговые поступления",
+                "fact": 479.0,
+                "plan": 430.0,
+            },
+            {
+                "code": "5",
+                "name": "Поступления трансфертов",
+                "fact": 3620.0,
+                "plan": 3617.0,
+            },
         ],
     }
     return data
@@ -477,3 +505,90 @@ def test_levels_section_empty_without_local():
 def test_minfin_section_includes_levels():
     html = minfin_section(sample_with_local())
     assert "Республика и места" in html
+
+
+# --- Устойчивость добычи -------------------------------------------------------
+
+
+def test_zero_total_is_source_error_not_crash():
+    """Нулевой итог давал ZeroDivisionError мимо except в collect и ронял весь
+    прогон, а не один отчёт."""
+    import minfin
+
+    rows = [r[:] for r in report_rows()]
+    rows[3][10] = rows[3][11] = "0"  # налоговые поступления без плана и факта
+    with pytest.raises(minfin.SourceError):
+        parse_report(FakeBook(rows))
+
+
+def test_report_list_carries_file_link(monkeypatch):
+    """Карточка части отчётов отвечает пустым объектом, и без ссылки из списка
+    такой отчёт считался «без файла»."""
+    import minfin
+
+    listing = [
+        {
+            "id": 856605,
+            "title": "Отчет об исполнении государственного бюджета на 1 июня 2025 года",
+            "created_date": "2025-06-13",
+            "full_text": [{"document": "/uploads/2025/6/13/report.bin"}],
+        }
+    ]
+    monkeypatch.setattr(minfin, "api_json", lambda url, timeout=90: listing)
+    found = minfin.reports("state")
+    assert found[0]["document"] == "/uploads/2025/6/13/report.bin"
+
+
+def test_fetch_report_prefers_link_from_list(monkeypatch, tmp_path):
+    import minfin
+
+    def refuse_card(url, timeout=90):
+        raise AssertionError("карточка не должна запрашиваться при ссылке из списка")
+
+    calls = []
+
+    def fake_download(url, path, min_size=1000, expect="xlsx", timeout=180):
+        calls.append(url)
+        return b"PK\x03\x04" + b"0" * 20_000
+
+    monkeypatch.setattr(minfin, "RAW", tmp_path)
+    monkeypatch.setattr(minfin, "api_json", refuse_card)
+    monkeypatch.setattr(minfin, "download", fake_download)
+    monkeypatch.setattr(minfin, "Workbook", lambda raw: raw)
+    report = {
+        "id": 1,
+        "year": 2025,
+        "months": 5,
+        "kind": "state",
+        "document": "/uploads/report.bin",
+    }
+    minfin.fetch_report(report)
+    assert calls == ["https://www.gov.kz/uploads/report.bin"]
+
+
+def test_fetch_report_drops_poisoned_cache(monkeypatch, tmp_path):
+    """Битый файл в бессрочном кэше жил вечно и ломал блок после того, как
+    источник ожил."""
+    import minfin
+
+    path = tmp_path / "minfin_state_2025_05.bin"
+    path.write_bytes(b"<!DOCTYPE html><html>" + b"x" * 20_000)
+    monkeypatch.setattr(minfin, "RAW", tmp_path)
+    monkeypatch.setattr(
+        minfin,
+        "download",
+        lambda url, p, min_size=1000, expect="xlsx", timeout=180: (
+            b"PK\x03\x04" + b"0" * 20_000
+        ),
+    )
+    monkeypatch.setattr(minfin, "Workbook", lambda raw: raw)
+    raw = minfin.fetch_report(
+        {
+            "id": 1,
+            "year": 2025,
+            "months": 5,
+            "kind": "state",
+            "document": "/uploads/report.bin",
+        }
+    )
+    assert raw.startswith(b"PK")

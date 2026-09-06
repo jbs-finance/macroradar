@@ -28,7 +28,10 @@ STAT_HOST = "https://stat.gov.kz"
 
 # Таблица решений по ставке разбита по годам на отдельные рубрики. Семь лет дают
 # диапазон, в котором есть и 9%, и 18%: этого достаточно, чтобы текущее значение
-# читалось на фоне истории.
+# читалось на фоне истории. Список известных рубрик это запасной вариант: id новой
+# рубрики из года не выводится, поэтому годы берутся с самой страницы, иначе новый
+# год просто не запрашивался бы, а обрыв заметил бы только гейт свежести.
+RATE_YEARS = 7
 RATE_RUBRICS = {
     2026: 2365,
     2025: 2237,
@@ -39,6 +42,7 @@ RATE_RUBRICS = {
     2020: 1543,
 }
 RATE_PAGE = f"{NBK_HOST}/ru/news/grafik-prinyatiya-resheniy-po-bazovoy-stavke"
+RUBRIC_LINK = re.compile(r'rubrics/(\d+)"[^>]*>\s*(20\d\d)\s*<')
 
 # Цель НБРК по инфляции, от неё считается «выше цели» в интерпретации.
 INFLATION_TARGET = 5.0
@@ -187,16 +191,40 @@ def parse_rate_table(markup: str) -> tuple[list[tuple[date, float, str]], list[d
     return decisions, planned
 
 
-def fetch_base_rate() -> tuple[Series, list[date], list[int]]:
+def rate_rubrics(today: date) -> dict[int, int]:
+    """Год -> рубрика таблицы решений, по последним RATE_YEARS годам.
+
+    Список тянется с самой страницы: там годы подписаны ссылками на рубрики, и
+    новый год подхватывается сам. Захардкоженный список остаётся запасным, чтобы
+    недоступность страницы-оглавления не стоила всей истории."""
+    known = dict(RATE_RUBRICS)
+    try:
+        body = fetch(RATE_PAGE, "rate_index.html").decode("utf-8", "ignore")
+    except SourceError:
+        body = ""
+    for rubric, year in RUBRIC_LINK.findall(body):
+        known[int(year)] = int(rubric)
+    return {
+        y: known[y]
+        for y in range(today.year, today.year - RATE_YEARS, -1)
+        if y in known
+    }
+
+
+def fetch_base_rate(today: date | None = None) -> tuple[Series, list[date], list[int]]:
     """Ряд решений, будущие даты и годы, которые собрать не удалось.
 
     Несобранный год возвращается наверх, а не проглатывается: если не скачался
     текущий год, ряд обрывается на прошлом, и без явного сигнала страница покажет
     старую ставку как действующую."""
+    today = today or date.today()
     decisions: list[tuple[date, float, str]] = []
     planned: list[date] = []
-    failed: list[int] = []
-    for year, rubric in RATE_RUBRICS.items():
+    rubrics = rate_rubrics(today)
+    failed: list[int] = [
+        y for y in range(today.year, today.year - RATE_YEARS, -1) if y not in rubrics
+    ]
+    for year, rubric in rubrics.items():
         url = f"{RATE_PAGE}/rubrics/{rubric}"
         try:
             body = fetch(url, f"rate_{year}.html").decode("utf-8", "ignore")
@@ -242,12 +270,18 @@ def calendar_events(markup: str) -> list[dict]:
     events = []
     blocks = re.split(r'<div class="calendar-event(?:\s[^"]*)?"[^>]*>', markup)[1:]
     for block in blocks:
-        day = re.search(r'calendar-event-day">\s*(\d{2})\.(\d{2})\.(\d{4})\s*</div>(.*?)<div class="calendar-event-type">\s*(.*?)\s*</div>', block, re.DOTALL)
+        day = re.search(
+            r'calendar-event-day">\s*(\d{2})\.(\d{2})\.(\d{4})\s*</div>(.*?)<div class="calendar-event-type">\s*(.*?)\s*</div>',
+            block,
+            re.DOTALL,
+        )
         if not day:
             continue
         middle = day.group(4)
         href_m = re.search(r'<a\b[^>]*href="([^"]+)"', middle)
-        title = re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", middle))).strip()
+        title = re.sub(
+            r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", middle))
+        ).strip()
         if not title:
             continue
         href = href_m.group(1) if href_m else "/ru/release-calendar/"
@@ -295,17 +329,21 @@ def parse_inflation_page(markup: str) -> dict:
                 return _num(m.group(1))
         return None
 
-    yoy = grab([
-        r"годов(?:ой|ая)[^%]{0,60}?составил[а]?\s*(\d+(?:[.,]\d+)?)\s*%",
-        r"за год составила\s*(\d+(?:[.,]\d+)?)\s*%",
-        r"Инфляция в Республике Казахстан в [а-яё]+ \d{4} года[^%]{0,40}?составила\s*(\d+(?:[.,]\d+)?)\s*%",
-    ])
+    yoy = grab(
+        [
+            r"годов(?:ой|ая)[^%]{0,60}?составил[а]?\s*(\d+(?:[.,]\d+)?)\s*%",
+            r"за год составила\s*(\d+(?:[.,]\d+)?)\s*%",
+            r"Инфляция в Республике Казахстан в [а-яё]+ \d{4} года[^%]{0,40}?составила\s*(\d+(?:[.,]\d+)?)\s*%",
+        ]
+    )
     if yoy is None or not 0 <= yoy < 60:
         raise SourceError("в публикации нет годовой инфляции")
-    mom = grab([
-        r"за месяц[^\d]{0,8}(\d+(?:[.,]\d+)?)\s*%",
-        r"Месячный уровень[^%]{0,80}?составил\s*(\d+(?:[.,]\d+)?)\s*%",
-    ])
+    mom = grab(
+        [
+            r"за месяц[^\d]{0,8}(\d+(?:[.,]\d+)?)\s*%",
+            r"Месячный уровень[^%]{0,80}?составил\s*(\d+(?:[.,]\d+)?)\s*%",
+        ]
+    )
     if mom is not None and abs(mom) > 5:
         mom = None
 
@@ -317,8 +355,12 @@ def parse_inflation_page(markup: str) -> dict:
         "month": f"{year}-{month:02d}",
         "yoy": yoy,
         "mom": mom,
-        "food": cat(r"(?<!не)продовольственные товары[^%]{0,40}?на\s*(\d+(?:[.,]\d+)?)\s*%"),
-        "nonfood": cat(r"непродовольственные товары[^%]{0,40}?на\s*(\d+(?:[.,]\d+)?)\s*%"),
+        "food": cat(
+            r"(?<!не)продовольственные товары[^%]{0,40}?на\s*(\d+(?:[.,]\d+)?)\s*%"
+        ),
+        "nonfood": cat(
+            r"непродовольственные товары[^%]{0,40}?на\s*(\d+(?:[.,]\d+)?)\s*%"
+        ),
         "services": cat(r"платные услуги[^%]{0,40}?на\s*(\d+(?:[.,]\d+)?)\s*%"),
     }
 
@@ -385,21 +427,27 @@ def fetch_inflation(
 # --- Календарь ближайших релизов ------------------------------------------------
 
 
-def fetch_upcoming(today: date, planned_rate: list[date]) -> list[dict]:
+def fetch_upcoming(
+    today: date, planned_rate: list[date], problems: list[str] | None = None
+) -> list[dict]:
     """Релизы БНС с сегодняшнего дня до конца следующего месяца плюс ближайшее
     решение по ставке. Календарь отдаёт события по одному дню, поэтому месяц
-    берётся с его страницы по умолчанию, а следующий месяц по первому числу."""
+    берётся с его страницы по умолчанию, а следующий месяц по первому числу.
+
+    Причина недоступности календаря пишется наверх: молча опустевший блок «что
+    выходит на этой неделе» неотличим от недели без публикаций."""
+    problems = [] if problems is None else problems
     events: list[dict] = []
     try:
         body = fetch(f"{STAT_HOST}/ru/release-calendar/", "relcal_current.html")
         events.extend(calendar_events(body.decode("utf-8", "ignore")))
-    except SourceError:
-        pass
+    except SourceError as exc:
+        problems.append(f"календарь релизов, текущий месяц: {exc}")
     ny, nm = (today.year, today.month + 1) if today.month < 12 else (today.year + 1, 1)
     try:
         events.extend(fetch_calendar_day(date(ny, nm, 1)))
-    except SourceError:
-        pass
+    except SourceError as exc:
+        problems.append(f"календарь релизов, {ny}-{nm:02d}: {exc}")
 
     upcoming = [
         {**e, "kind": "stat"} for e in events if date.fromisoformat(e["date"]) >= today
@@ -417,7 +465,9 @@ def fetch_upcoming(today: date, planned_rate: list[date]) -> list[dict]:
             )
     seen = set()
     unique = []
-    for e in sorted(upcoming, key=lambda e: (e["date"], -release_priority(e), e["title"])):
+    for e in sorted(
+        upcoming, key=lambda e: (e["date"], -release_priority(e), e["title"])
+    ):
         key = (e["date"], e["title"])
         if key in seen or release_priority(e) == 0:
             continue
@@ -462,9 +512,17 @@ def release_priority(event: dict) -> int:
 # --- Лента событий -------------------------------------------------------------
 
 
-def rate_events(rate: Series, since: date) -> list[dict]:
+def rate_events(rate: Series, since: date, today: date | None = None) -> list[dict]:
+    """Лента изменений по ставке.
+
+    У ставки дата это день вступления в силу, а решение объявляют раньше. Такое
+    событие попадало в ленту прошедших изменений завтрашним числом и читалось как
+    ошибка. Оно остаётся (карточка ставки уже показывает новое значение), но
+    помечается как ещё не наступившее.
+    """
     out = []
     obs = rate.obs
+    today = today or date.today()
     for i, o in enumerate(obs):
         d = date.fromisoformat(o.date)
         if d < since:
@@ -479,11 +537,15 @@ def rate_events(rate: Series, since: date) -> list[dict]:
         tail = (
             f" (было {fmt_pct(prev)})" if prev is not None and o.value != prev else ""
         )
+        upcoming = d > today
+        if upcoming:
+            verb = {"снизил": "снижает", "повысил": "повышает"}.get(verb, "сохраняет")
         out.append(
             {
                 "date": o.date,
                 "kind": "rate",
                 "text": f"НБРК {verb} базовую ставку до {fmt_pct(o.value)}{tail}",
+                "upcoming": upcoming,
             }
         )
     return out
@@ -621,7 +683,9 @@ def parse_business_activity(markup: str) -> dict:
     month = MONTHS_PREP[period.group(1).lower()]
     year = int(period.group(2))
 
-    total = re.search(r"индекс деловой активности[^.]{0,120}?состав\w+\s*(\d+(?:[.,]\d+)?)", text)
+    total = re.search(
+        r"индекс деловой активности[^.]{0,120}?состав\w+\s*(\d+(?:[.,]\d+)?)", text
+    )
     if not total:
         raise SourceError("в сообщении нет сводного значения ИДА")
 
@@ -664,12 +728,16 @@ def fetch_business_activity() -> tuple[dict | None, list[str]]:
 
     seen: set[str] = set()
     for href, num, raw_title in re.findall(
-        r'href="(/ru/news/informacionnye-soobshcheniya/(\d+))"[^>]*>(.*?)</a>', listing, re.DOTALL
+        r'href="(/ru/news/informacionnye-soobshcheniya/(\d+))"[^>]*>(.*?)</a>',
+        listing,
+        re.DOTALL,
     ):
         if num in seen:
             continue
         seen.add(num)
-        title = re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", raw_title))).strip()
+        title = re.sub(
+            r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", raw_title))
+        ).strip()
         if "ИДА" not in title and "еловая активность" not in title:
             continue
         url = NBK_HOST + href
@@ -680,7 +748,9 @@ def fetch_business_activity() -> tuple[dict | None, list[str]]:
             problems.append(f"ИДА: {exc}")
             continue
         if not (20 <= data["value"] <= 80):
-            problems.append(f"ИДА: значение {data['value']} вне правдоподобного диапазона")
+            problems.append(
+                f"ИДА: значение {data['value']} вне правдоподобного диапазона"
+            )
             continue
         data["source"] = "Национальный Банк РК"
         data["source_url"] = url
@@ -695,7 +765,9 @@ def signal_business_activity(bai: dict | None) -> str:
     if not bai:
         return ""
     value = bai["value"]
-    weak = [s["name"].lower() for s in bai.get("sectors", []) if s["value"] < BAI_NEUTRAL]
+    weak = [
+        s["name"].lower() for s in bai.get("sectors", []) if s["value"] < BAI_NEUTRAL
+    ]
     if value > BAI_NEUTRAL + 2:
         head = f"Активность заметно расширяется ({fmt_pct(value).rstrip('%')} против нейтральных 50): спрос растёт, конкуренция за подрядчиков и кадры усиливается."
     elif value > BAI_NEUTRAL:
@@ -866,8 +938,15 @@ def load_json(path: Path | None) -> dict:
         return {}
 
 
-def build(dataset: Path, pulse_path: Path | None, trade_path: Path | None) -> dict:
-    today = date.today()
+def build(
+    dataset: Path,
+    pulse_path: Path | None,
+    trade_path: Path | None,
+    today: date | None = None,
+) -> dict:
+    # Дата фиксируется один раз на прогон: прогон, пересекающий полночь, иначе
+    # мерит возраст ставки одним днём, а возраст ИДА другим.
+    today = today or date.today()
     previous = load_json(dataset)
     pulse = load_json(pulse_path)
     trade = load_json(trade_path)
@@ -881,16 +960,16 @@ def build(dataset: Path, pulse_path: Path | None, trade_path: Path | None) -> di
 
     rate: Series | None = None
     try:
-        rate, planned_rate, failed_years = fetch_base_rate()
+        rate, planned_rate, failed_years = fetch_base_rate(today)
         if failed_years:
             issues.append(
                 "kz.rate.base: не собраны решения за "
                 + ", ".join(str(y) for y in failed_years)
             )
-        problems = validate(rate, {"min": 1, "max": 40})
+        problems = validate(rate, {"min": 1, "max": 40}, today)
         # Дневная мера свежести к ставке неприменима: решений восемь в год. Но и
         # снимать проверку нельзя, иначе обрыв ряда на прошлом годе пройдёт молча.
-        age = (date.today() - date.fromisoformat(rate.obs[-1].date)).days
+        age = (today - date.fromisoformat(rate.obs[-1].date)).days
         problems = [p for p in problems if "старше" not in p]
         if age > RATE_MAX_AGE_DAYS:
             problems.append(
@@ -931,13 +1010,19 @@ def build(dataset: Path, pulse_path: Path | None, trade_path: Path | None) -> di
     else:
         issues.append("kz.cpi.monthly: ни одной публикации об инфляции не найдено")
 
-    calendar = fetch_upcoming(today, planned_rate)
+    calendar_problems: list[str] = []
+    calendar = fetch_upcoming(today, planned_rate, calendar_problems)
+    issues.extend(calendar_problems)
     next_rate = next((e for e in calendar if e["kind"] == "rate"), None)
+    if not next_rate:
+        issues.append(
+            "следующее решение по ставке неизвестно: в таблице нет будущих дат"
+        )
 
     since = today - timedelta(days=EVENT_WINDOW_DAYS)
     events: list[dict] = []
     if rate:
-        events.extend(rate_events(rate, since))
+        events.extend(rate_events(rate, since, today))
     events.extend(inflation_events(points, since))
     events.extend(fx_events(by_id.get("kz.fx.usd"), today))
     events.sort(key=lambda e: e["date"], reverse=True)
@@ -949,7 +1034,9 @@ def build(dataset: Path, pulse_path: Path | None, trade_path: Path | None) -> di
         if old_bai:
             bai = {**old_bai, "stale": True}
     elif bai:
-        age = (date.today() - date(int(bai["month"][:4]), int(bai["month"][5:7]), 28)).days
+        age = (
+            date.today() - date(int(bai["month"][:4]), int(bai["month"][5:7]), 28)
+        ).days
         if age > BAI_MAX_AGE_DAYS:
             issues.append(f"ИДА: последнее сообщение за {bai['month']}")
 
@@ -1006,6 +1093,15 @@ def main() -> None:
     for issue in data["issues"]:
         print(f"  проблема: {issue}")
     print(f"Записано: {dataset}")
+    # Ставка и месячная инфляция это и есть радар: без любой из них публиковать
+    # нечего, и молчаливый нулевой код скрыл бы дыру.
+    lost = []
+    if not any(s["series_id"] == "kz.rate.base" for s in data["series"]):
+        lost.append("базовая ставка")
+    if not data["inflation"]:
+        lost.append("месячная инфляция")
+    if lost:
+        raise SystemExit(f"потеряно целиком: {', '.join(lost)}")
 
 
 if __name__ == "__main__":

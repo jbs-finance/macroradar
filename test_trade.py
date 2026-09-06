@@ -46,9 +46,28 @@ class TestTopPartners:
         assert items[0]["label"] == "Китай"
         assert items[0]["value"] == pytest.approx(15.2, abs=0.01)
 
-    def test_unknown_code_shown_as_code_not_invented(self):
-        items = top_partners([{"partnerCode": 999999, "primaryValue": 1e9}])
-        assert items[0]["label"] == "код 999999"
+    def test_unresolved_code_not_published(self):
+        """Голый номер в топ-10 партнёров это не данные, а видимость данных."""
+        dropped = []
+        items = top_partners(
+            [{"partnerCode": 999999, "primaryValue": 1e9}], dropped=dropped
+        )
+        assert items == []
+        assert dropped and dropped[0].startswith("999999")
+
+    def test_reference_name_used_when_russian_missing(self):
+        """Справочник Comtrade закрывает коды, которых нет в русском словаре."""
+        items = top_partners(
+            [{"partnerCode": 999999, "primaryValue": 1e9}],
+            names={999999: "Neverland"},
+        )
+        assert [i["label"] for i in items] == ["Neverland"]
+
+    def test_russian_name_wins_over_reference(self):
+        items = top_partners(
+            [{"partnerCode": 156, "primaryValue": 1e9}], names={156: "China"}
+        )
+        assert items[0]["label"] == "Китай"
 
     def test_zero_and_missing_values_skipped(self):
         rows = [
@@ -62,7 +81,52 @@ class TestTopPartners:
         rows = [
             {"partnerCode": 100 + i, "primaryValue": (50 - i) * 1e9} for i in range(30)
         ]
-        assert len(top_partners(rows, top_n=10)) == 10
+        names = {100 + i: f"Страна {i}" for i in range(30)}
+        assert len(top_partners(rows, top_n=10, names=names)) == 10
+
+
+class TestComtradeEnvelope:
+    """Пустой список это «за год ещё не опубликовано», и он штатный. Смена схемы
+    ответа давала такой же пустой список, неотличимый от отсутствия данных."""
+
+    def comtrade_returning(self, monkeypatch, body: bytes, tmp_path):
+        import trade
+
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self, *args):
+                return body
+
+        monkeypatch.setattr(trade, "RAW", tmp_path)
+        monkeypatch.setattr(
+            trade.urllib.request, "urlopen", lambda *a, **k: Response()
+        )
+        return trade
+
+    def test_missing_data_key_is_an_error(self, monkeypatch, tmp_path):
+        import pytest as _pytest
+
+        trade = self.comtrade_returning(
+            monkeypatch, b'{"results": []}', tmp_path
+        )
+        with _pytest.raises(trade.SourceError, match="data"):
+            trade.comtrade({"period": 2025}, "x.json")
+
+    def test_data_of_wrong_shape_is_an_error(self, monkeypatch, tmp_path):
+        import pytest as _pytest
+
+        trade = self.comtrade_returning(monkeypatch, b'{"data": "text"}', tmp_path)
+        with _pytest.raises(trade.SourceError, match="data"):
+            trade.comtrade({"period": 2025}, "x.json")
+
+    def test_empty_data_stays_empty_not_error(self, monkeypatch, tmp_path):
+        trade = self.comtrade_returning(monkeypatch, b'{"data": []}', tmp_path)
+        assert trade.comtrade({"period": 2025}, "x.json") == []
 
 
 class TestTopCommodities:

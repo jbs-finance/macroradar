@@ -307,3 +307,64 @@ def test_rates_page_has_no_dashboard():
     page = build_tax.build(data)
     assert "Сколько собирают" not in page and "plan-table" not in page
     assert "/macroradar/budget/" in page
+
+
+# --- Проверка скачанного до записи в кэш ---------------------------------------
+
+
+def test_html_error_page_never_passes_as_file():
+    """Главная поломка кэша: тело страницы 404 весом больше порога ложилось в raw/
+    и потом неделями считалось скачанным файлом."""
+    body = b"<!DOCTYPE html><html><body>" + b"x" * 5000 + b"</body></html>"
+    assert budget.payload_problem(body, "xlsx", 1000)
+    assert budget.payload_problem(body, "document", 1000)
+
+
+def test_short_answer_rejected():
+    assert budget.payload_problem(b"PK\x03\x04", "xlsx", 1000)
+
+
+def test_zip_signature_accepted():
+    assert budget.payload_problem(b"PK\x03\x04" + b"0" * 2000, "xlsx", 1000) is None
+
+
+def test_old_excel_accepted_only_as_document():
+    ole = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"0" * 2000
+    assert budget.payload_problem(ole, "document", 1000) is None
+    assert budget.payload_problem(ole, "xlsx", 1000)
+
+
+def test_page_is_allowed_to_be_html():
+    assert budget.payload_problem(b"<html>" + b"y" * 2000, "page", 1000) is None
+
+
+def test_sheet_total_reports_unreadable_header():
+    """Ноль вместо ошибки ломал поиск свода, и разрез начинал удваивать суммы."""
+    book = FakeBook({"01": [["текст"], ["без", "шапки"]]})
+    with pytest.raises(SourceError):
+        budget.sheet_total(book, "path/01")
+
+
+def test_fetch_structure_tries_next_month_after_bad_file(monkeypatch):
+    """Раньше первый непонятый файл обрывал перебор, и пять следующих месяцев,
+    которые могли разобраться, не пробовались."""
+    page = """
+    <tr><td>2025</td><td><a href="/a.xls">Май</a></td></tr>
+    <tr><td>2025</td><td><a href="/b.xls">Апрель</a></td></tr>
+    """
+    books = {"/a.xls": None, "/b.xls": book_with_summary()}
+
+    def fake_fetch_file(url, name, max_age_days=7, expect="xlsx"):
+        return page.encode() if url == budget.FACT_PAGE else url.encode()
+
+    def fake_workbook(raw):
+        book = books[raw.decode()]
+        if book is None:
+            raise SourceError("файл не является xlsx")
+        return book
+
+    monkeypatch.setattr(budget, "fetch_file", fake_fetch_file)
+    monkeypatch.setattr(budget, "Workbook", fake_workbook)
+    result = budget.fetch_structure()
+    assert result["period"] == "2025-04"
+    assert any("2025-05" in s for s in result["skipped"])
