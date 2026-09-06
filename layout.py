@@ -13,12 +13,12 @@ import json
 SITE = "https://jbs.finance"
 
 TABS = [
-    ("hub", "Обзор", "#overview"),
-    ("macro", "Макро", "#macro"),
-    ("trade", "Торговля", "#trade"),
-    ("fund", "Нацфонд", "#national-fund"),
-    ("budget", "Бюджет", "#budget"),
-    ("tax", "Ставки", "#tax"),
+    ("hub", "Обзор", "/macroradar/"),
+    ("macro", "Макро", "/macroradar/macro/"),
+    ("trade", "Торговля", "/macroradar/trade/"),
+    ("fund", "Нацфонд", "/macroradar/national-fund/"),
+    ("budget", "Бюджет", "/macroradar/budget/"),
+    ("tax", "Ставки", "/macroradar/tax/"),
 ]
 
 HEADER_STYLE = """
@@ -55,19 +55,14 @@ HEADER_STYLE = """
 """
 
 
-def site_header(active: str, tabs_as_controls: bool = False) -> str:
+def site_header(active: str) -> str:
     """Тёмная полоса сайта плюс липкие вкладки радара."""
-    if tabs_as_controls:
-        tabs = "\n".join(
-            f'      <label for="view-{key}">{label}</label>'
-            for key, label, _ in TABS
-        )
-    else:
-        tabs = "\n".join(
-            f'      <a href="{href}">{label}</a>' if key != active
-            else f'      <a href="{href}" aria-current="page">{label}</a>'
-            for key, label, href in TABS
-        )
+    tabs = "\n".join(
+        f'      <a href="{href}">{label}</a>'
+        if key != active
+        else f'      <a href="{href}" aria-current="page">{label}</a>'
+        for key, label, href in TABS
+    )
     return f"""<div class="site-bar">
   <div class="inner">
     <a class="site-brand" href="{SITE}/ru"><span class="mark">JB</span>JB Solutions</a>
@@ -156,7 +151,11 @@ def dataset_jsonld(
                 "inLanguage": "ru",
                 "isAccessibleForFree": True,
                 "dateModified": updated_iso,
-                "creator": {"@type": "Organization", "name": "JB Solutions", "url": SITE},
+                "creator": {
+                    "@type": "Organization",
+                    "name": "JB Solutions",
+                    "url": SITE,
+                },
                 "spatialCoverage": {"@type": "Place", "name": "Казахстан"},
                 "sourceOrganization": [
                     {"@type": "Organization", "name": n} for n in names.split(", ") if n

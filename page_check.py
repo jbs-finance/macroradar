@@ -1,10 +1,9 @@
-"""Структурная проверка собранной страницы радара.
+"""Структурная проверка набора страниц Macro Radar.
 
-Страница переключает вкладки без скриптов: CSP стоит `script-src 'none'`, поэтому
-показ панели держится на соседском селекторе `#view-x:checked ~ ... .panel-x`.
-Селектор работает молча: стоит панели уехать из соседей радиокнопки, вкладка
-открывается пустой, а все проверки по наличию идентификаторов остаются зелёными.
-Здесь проверяется именно достижимость, а не присутствие разметки.
+Хаб и пять тем разъехались по собственным адресам: у каждой свой файл, свой h1
+и свой canonical. Проверка идёт по каталогу public/macroradar, а не по одному
+файлу: нужно поймать не только сломанную разметку внутри страницы, но и
+разрыв перелинковки между страницами, и возврат прежней склейки вкладок.
 """
 
 from __future__ import annotations
@@ -13,13 +12,37 @@ import sys
 from html.parser import HTMLParser
 from pathlib import Path
 
-VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"}
+VOID = {
+    "area",
+    "base",
+    "br",
+    "col",
+    "embed",
+    "hr",
+    "img",
+    "input",
+    "link",
+    "meta",
+    "param",
+    "source",
+    "track",
+    "wbr",
+}
 
-VIEWS = {"view-hub": "panel-hub", "view-macro": "panel-macro", "view-trade": "panel-trade", "view-fund": "panel-national-fund", "view-budget": "panel-budget", "view-tax": "panel-tax"}
+SITE = "https://jbs.finance"
+
+PAGES = {
+    "": "index.html",
+    "macro": "macro/index.html",
+    "trade": "trade/index.html",
+    "national-fund": "national-fund/index.html",
+    "budget": "budget/index.html",
+    "tax": "tax/index.html",
+}
 
 
 class Node:
-    def __init__(self, tag: str, attrs: list, parent: "Node | None"):
+    def __init__(self, tag: str, attrs: list, parent: Node | None):
         self.tag, self.attrs, self.parent, self.children = tag, dict(attrs), parent, []
 
     @property
@@ -30,14 +53,6 @@ class Node:
         for child in self.children:
             yield child
             yield from child.walk()
-
-    def descends_from(self, other: "Node") -> bool:
-        node = self.parent
-        while node is not None:
-            if node is other:
-                return True
-            node = node.parent
-        return False
 
 
 class Tree(HTMLParser):
@@ -64,50 +79,103 @@ class Tree(HTMLParser):
             self.cur = node.parent
 
 
-def reachable(source: Node, target: Node) -> bool:
-    """Правило `source:checked ~ ... target` срабатывает, только если target лежит
-    в самом последующем соседе source или внутри него."""
-    siblings = source.parent.children
-    after = siblings[siblings.index(source) + 1:]
-    return any(target is node or target.descends_from(node) for node in after)
+def path_for(slug: str) -> str:
+    return f"/macroradar/{slug}/" if slug else "/macroradar/"
 
 
-def problems(document: str) -> list[str]:
-    tree = Tree(document)
-    inputs = {node.attrs.get("id"): node for node in tree.root.walk() if "tab-state" in node.classes}
-    panels = {name: node for node in tree.root.walk() for name in node.classes if name.startswith("panel-")}
+def url_for(slug: str) -> str:
+    return f"{SITE}{path_for(slug)}"
+
+
+def page_problems(base: Path, slug: str) -> list[str]:
+    relpath = PAGES[slug]
+    path = base / relpath
+    if not path.exists():
+        return [f"{relpath}: файл не найден"]
+    document = path.read_text(encoding="utf-8")
+    if not document.strip():
+        return [f"{relpath}: файл пустой"]
+
     found = []
-    for view, panel in VIEWS.items():
-        if view not in inputs:
-            found.append(f"нет радиокнопки #{view}")
-        elif panel not in panels:
-            found.append(f"нет панели .{panel}")
-        elif not reachable(inputs[view], panels[panel]):
-            found.append(f"панель .{panel} не показать через #{view}:checked")
-    every = [node for node in tree.root.walk() if "tab-panel" in node.classes]
-    for node in every:
-        if any(node.descends_from(other) for other in every):
-            found.append(f"вкладка {' '.join(node.classes)} вложена в другую вкладку")
-    navs = [node for node in tree.root.walk() if "tabs" in node.classes]
-    if not navs:
-        found.append("нет панели вкладок .tabs")
+    if 'class="tab-state"' in document or "#view-" in document:
+        found.append(f"{relpath}: осталась склейка вкладок (tab-state или #view-)")
+
+    tree = Tree(document)
+    nodes = list(tree.root.walk())
+
+    h1s = [n for n in nodes if n.tag == "h1"]
+    if len(h1s) != 1:
+        found.append(f"{relpath}: {len(h1s)} тегов h1 вместо одного")
+
+    canonical = next(
+        (n for n in nodes if n.tag == "link" and n.attrs.get("rel") == "canonical"),
+        None,
+    )
+    expected = url_for(slug)
+    if canonical is None:
+        found.append(f"{relpath}: нет rel=canonical")
+    elif canonical.attrs.get("href") != expected:
+        found.append(
+            f"{relpath}: canonical {canonical.attrs.get('href')} вместо {expected}"
+        )
+
+    for n in nodes:
+        if n.tag == "script" and n.attrs.get("type") != "application/ld+json":
+            found.append(
+                f"{relpath}: исполняемый <script> запрещён CSP (script-src 'none')"
+            )
+
+    if slug == "":
+        cards = [n for n in nodes if n.tag == "a" and "radar-card" in n.classes]
+        if len(cards) != 5:
+            found.append(f"{relpath}: на хабе {len(cards)} карточек вместо 5")
+        for card in cards:
+            href = card.attrs.get("href", "")
+            target_slug = next((s for s in PAGES if s and path_for(s) == href), None)
+            if target_slug is None or not (base / PAGES[target_slug]).exists():
+                found.append(
+                    f"{relpath}: карточка ведёт на несуществующую страницу {href}"
+                )
     else:
-        for view in VIEWS:
-            if view in inputs and not reachable(inputs[view], navs[0]):
-                found.append(f"подсветку вкладки {view} не применить")
+        nav = next((n for n in nodes if n.tag == "nav" and "tabs" in n.classes), None)
+        if nav is None:
+            found.append(f"{relpath}: нет навигации .tabs в шапке")
+        else:
+            nav_hrefs = {n.attrs.get("href") for n in nav.walk() if n.tag == "a"}
+            for other in PAGES:
+                if other == slug:
+                    continue
+                href = path_for(other)
+                if href not in nav_hrefs:
+                    found.append(f"{relpath}: в шапке нет ссылки на {href}")
+                elif not (base / PAGES[other]).exists():
+                    found.append(
+                        f"{relpath}: ссылка на {href} ведёт на несуществующий файл"
+                    )
+
+    return found
+
+
+def problems(base: Path) -> list[str]:
+    found = []
+    for slug in PAGES:
+        found.extend(page_problems(base, slug))
     return found
 
 
 def main() -> None:
     if len(sys.argv) != 2:
-        raise SystemExit("Использование: page_check.py PAGE.html")
-    found = problems(Path(sys.argv[1]).read_text(encoding="utf-8"))
+        raise SystemExit(
+            "Использование: page_check.py КАТАЛОГ (например public/macroradar)"
+        )
+    base = Path(sys.argv[1])
+    found = problems(base)
     if found:
-        print("вкладки собраны неверно:")
+        print("страницы собраны неверно:")
         for line in found:
             print(" -", line)
         raise SystemExit(1)
-    print(f"вкладки достижимы: {len(VIEWS)}")
+    print(f"страниц проверено: {len(PAGES)}")
 
 
 if __name__ == "__main__":

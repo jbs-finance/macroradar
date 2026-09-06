@@ -1,24 +1,39 @@
-"""Контракт единственной публичной страницы Macro Radar."""
+"""Контракт связки Macro Radar: хаб плюс пять самостоятельных тем.
+
+Раньше вкладки жили на одном URL через соседский CSS-селектор. Регресс, который
+эти тесты обязаны ловить: страница темы должна существовать отдельным файлом,
+со своим canonical и ровно одним h1, а не панелью внутри хаба.
+"""
 
 import json
 import re
 from pathlib import Path
 
-from build_macroradar import build
-from page_check import problems
-
+from build_budget import build as build_budget
+from build_macroradar import build as build_hub
+from build_national_fund import build as build_national_fund
+from build_radar import build as build_radar
+from build_tax import build as build_tax
+from build_trade import build as build_trade
+from page_check import PAGES, problems
 
 HERE = Path(__file__).resolve().parent
+
+TOPICS = ("macro", "trade", "national-fund", "budget", "tax")
 
 
 def data(name: str) -> dict:
     return json.loads((HERE / "fixtures" / name).read_text(encoding="utf-8"))
 
 
-def national_fund() -> dict:
+def national_fund_data() -> dict:
     return {
         "generated_at": "2026-09-05T12:00:00+00:00",
-        "assets": [{"date": "2016-09", "value": 64.537}, {"date": "2025-12", "value": 60.1}, {"date": "2026-07", "value": 66.121}],
+        "assets": [
+            {"date": "2016-09", "value": 64.537},
+            {"date": "2025-12", "value": 60.1},
+            {"date": "2026-07", "value": 66.121},
+        ],
         "assets_source": "https://nationalbank.kz/assets",
         "returns": [{"date": "2016", "value": 0.84}, {"date": "2025", "value": 15.09}],
         "returns_source": "https://nationalbank.kz/returns",
@@ -26,38 +41,76 @@ def national_fund() -> dict:
     }
 
 
-def page() -> str:
-    return build(data("radar.json"), data("pulse.json"), data("trade.json"), national_fund(), data("tax.json"), data("minfin.json"), data("budget.json"), data("oblast.json"))
+def documents() -> dict[str, str]:
+    return {
+        "": build_hub(),
+        "macro": build_radar(
+            data("radar.json"), data("pulse.json"), data("trade.json")
+        ),
+        "trade": build_trade(data("trade.json")),
+        "national-fund": build_national_fund(national_fund_data()),
+        "budget": build_budget(
+            data("minfin.json"), data("budget.json"), data("oblast.json")
+        ),
+        "tax": build_tax(data("tax.json")),
+    }
 
 
-def test_root_has_all_analyses_as_tabs_and_metadata():
-    document = page()
+def write_pages(base: Path, pages: dict[str, str]) -> None:
+    for slug, document in pages.items():
+        path = base / PAGES[slug]
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(document, encoding="utf-8")
+
+
+def test_hub_links_to_five_topic_pages_with_own_urls():
+    document = documents()[""]
     assert 'rel="canonical" href="https://jbs.finance/macroradar/"' in document
     assert 'property="og:url" content="https://jbs.finance/macroradar/"' in document
     assert '"@type": "CollectionPage"' in document
-    for view in ("hub", "macro", "trade", "fund", "budget", "tax"):
-        assert f'id="view-{view}"' in document
-        assert f'for="view-{view}"' in document
+    for topic in TOPICS:
+        assert f'href="/macroradar/{topic}/"' in document
+        assert f'"url": "https://jbs.finance/macroradar/{topic}/"' in document
 
 
-def test_root_includes_fund_portfolio_and_no_analysis_page_links():
-    document = page()
-    assert "Состав сберегательного портфеля" in document
-    assert "36,3%" in document
-    assert "Альтернативные инструменты" in document
-    assert "не доли всего Нацфонда на текущую дату" in document
-    assert not re.search(r'href="/macroradar/(macro|trade|national-fund|budget|tax)/"', document)
-    assert 'href="#macro"' not in document
+def test_hub_has_no_leftover_tab_gluing_and_single_h1():
+    document = documents()[""]
+    assert 'class="tab-state"' not in document
+    assert "#view-" not in document
+    assert document.count("<h1") == 1
 
 
-def test_root_is_self_contained_and_csp_prohibits_executable_scripts():
-    document = page()
+def test_hub_is_self_contained_and_csp_prohibits_executable_scripts():
+    document = documents()[""]
     assert "script-src 'none'" in document
-    assert re.findall(r"<script[^>]*>", document) == ['<script type="application/ld+json">']
+    assert re.findall(r"<script[^>]*>", document) == [
+        '<script type="application/ld+json">'
+    ]
     assert "onclick=" not in document
 
 
-def test_every_tab_panel_is_reachable_from_its_radio():
-    """Соседский селектор молчит, когда панель уезжает из соседей радиокнопки:
-    вкладка открывается пустой, а проверки по наличию идентификаторов зелёные."""
-    assert problems(page()) == []
+def test_each_topic_page_has_own_canonical_and_single_h1():
+    pages = documents()
+    for topic in TOPICS:
+        document = pages[topic]
+        expected = f"https://jbs.finance/macroradar/{topic}/"
+        assert f'rel="canonical" href="{expected}"' in document
+        assert document.count("<h1") == 1
+        assert 'class="tab-state"' not in document
+        assert "#view-" not in document
+
+
+def test_each_topic_page_links_back_to_the_other_five():
+    pages = documents()
+    for topic in TOPICS:
+        document = pages[topic]
+        for other in ("",) + TOPICS:
+            if other == topic:
+                continue
+            href = f"/macroradar/{other}/" if other else "/macroradar/"
+            assert f'href="{href}"' in document
+
+
+def test_full_page_set_passes_the_structural_gate(tmp_path):
+    write_pages(tmp_path, documents())
+    assert problems(tmp_path) == []
