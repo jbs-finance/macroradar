@@ -18,6 +18,24 @@ HERE = Path(__file__).resolve().parent
 DEFAULT_OUT = HERE / "out" / "macroradar.html"
 
 HUB_STYLE = """
+/* Пока хаб склеивался с темами, палитра приезжала из их стилей. Теперь темы живут
+   отдельно, и без своего :root хаб уходит на прод бесцветным: переменные ниже
+   используются его же карточками и шапкой. Значения те же, что у страниц тем. */
+:root {
+  --bg: #F5F0E8;
+  --fg: #2C2420;
+  --card: #FFFFFF;
+  --muted: #E8DFD0;
+  --muted-fg: #6E6256;
+  --accent: #C0603D;
+  --line: #9B8E82;
+  --radius: 10px;
+  --dur-in: 200ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+.wrap { max-width: 1120px; margin-inline: auto; padding-inline: clamp(1rem, 4vw, 2.5rem); }
 .radar-hero { padding-block: clamp(2.5rem, 8vw, 5.75rem) clamp(2rem, 5vw, 3.5rem); max-width: 900px; }
 .eyebrow { display: inline-flex; align-items: center; gap: .55rem; margin: 0 0 1rem; color: var(--accent); font-size: .75rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
 .eyebrow::before { content: ""; width: 1.8rem; height: 2px; background: currentColor; }

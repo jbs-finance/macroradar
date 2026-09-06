@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 from html.parser import HTMLParser
 from pathlib import Path
@@ -99,6 +100,16 @@ def page_problems(base: Path, slug: str) -> list[str]:
     found = []
     if 'class="tab-state"' in document or "#view-" in document:
         found.append(f"{relpath}: осталась склейка вкладок (tab-state или #view-)")
+
+    # Пока страницы склеивались, палитру можно было брать у соседа по документу.
+    # Теперь каждая отвечает за свои переменные сама: незамеченная нехватка уводит
+    # страницу на прод без цветов, при этом вся разметка на месте и остальные
+    # проверки зелёные. Так хаб и уехал бы после разделения.
+    used = set(re.findall(r"var\((--[a-z0-9-]+)\)", document))
+    declared = set(re.findall(r"(--[a-z0-9-]+)\s*:", document))
+    missing = sorted(used - declared)
+    if missing:
+        found.append(f"{relpath}: переменные без объявления: {', '.join(missing)}")
 
     tree = Tree(document)
     nodes = list(tree.root.walk())
