@@ -15,7 +15,15 @@ import sys
 from datetime import date, datetime
 from pathlib import Path
 
-from layout import CTA_STYLE, HEADER_STYLE, cta_block, meta_tags, site_header
+from layout import (
+    CTA_STYLE,
+    HEADER_STYLE,
+    NO_DATA_STYLE,
+    cta_block,
+    meta_tags,
+    no_data,
+    site_header,
+)
 from build_pulse import STYLE, fmt_date
 
 HERE = Path(__file__).resolve().parent
@@ -53,6 +61,8 @@ TAX_STYLE = """
 
 
 def base_cards(items: list[dict]) -> str:
+    if not items:
+        return no_data("базовые величины МРП и МЗП не собрались")
     return "\n".join(
         f"""        <article class="card">
           <h3>{html.escape(item["name"])}</h3>
@@ -75,9 +85,11 @@ def group_block(group: dict) -> str:
         if group.get("note")
         else ""
     )
+    empty = no_data("строк в этой группе нет") if not group["items"] else ""
     return f"""      <section class="tax-group" id="{html.escape(group["id"])}">
         <h3>{html.escape(group["title"])}</h3>
         {note}
+        {empty}
         <div class="tax-scroll">
         <table class="tax-table">
           <thead>
@@ -105,8 +117,10 @@ def simple_table(title: str, items: list[dict], columns: tuple[str, str]) -> str
         for i in items
     )
     third = '<th scope="col">Последствие</th>' if items and "effect" in items[0] else ""
+    empty = no_data("строк в этой таблице нет") if not items else ""
     return f"""      <section class="tax-group">
         <h3>{html.escape(title)}</h3>
+        {empty}
         <div class="tax-scroll">
         <table class="tax-table">
           <thead><tr><th scope="col">{columns[0]}</th><th scope="col">{columns[1]}</th>{third}</tr></thead>
@@ -131,14 +145,15 @@ def build(data: dict) -> str:
         ,
         header=site_header('tax'),
         cta=cta_block(),
-        style=STYLE + HEADER_STYLE + CTA_STYLE + TAX_STYLE,
+        style=STYLE + HEADER_STYLE + CTA_STYLE + TAX_STYLE + NO_DATA_STYLE,
         year=data["year"],
         generated_human=generated.strftime("%d.%m.%Y %H:%M UTC"),
         generated_iso=generated.isoformat(),
         reviewed_human=fmt_date(data["reviewed_at"]),
         source=html.escape(data["source"]),
         base_cards=base_cards(data["base"]),
-        groups="\n".join(group_block(g) for g in data["groups"]),
+        groups="\n".join(group_block(g) for g in data["groups"])
+        or no_data("справочник ставок не собрался"),
         calendar=simple_table(
             "Сроки отчётности и уплаты", data["calendar"], ("Налог или форма", "Срок")
         ),

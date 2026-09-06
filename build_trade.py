@@ -15,7 +15,18 @@ import sys
 from datetime import date, datetime
 from pathlib import Path
 
-from layout import CTA_STYLE, HEADER_STYLE, cta_block, meta_tags, site_header
+from layout import (
+    CTA_STYLE,
+    HEADER_STYLE,
+    NO_DATA_STYLE,
+    cta_block,
+    freshness_badge,
+    issues_notice,
+    meta_tags,
+    no_data,
+    site_header,
+    with_freshness,
+)
 from build_pulse import STYLE, card, fmt_num
 
 HERE = Path(__file__).resolve().parent
@@ -45,10 +56,13 @@ RANKING_STYLE = """
 def ranking(breakdown: dict) -> str:
     items = breakdown.get("items") or []
     top = max((i["value"] for i in items), default=1) or 1
-    badge = (
-        '<span class="badge badge-stale">данные устарели</span>'
-        if breakdown.get("stale")
-        else '<span class="badge badge-fresh">актуально</span>'
+    badge = freshness_badge(
+        str(breakdown.get("year", "")), "A", bool(breakdown.get("stale"))
+    )
+    empty = (
+        no_data("строк в этом разрезе нет, источник вернул пустой список")
+        if not items
+        else ""
     )
     rows = "\n".join(
         f'          <li><span class="label">{html.escape(str(i["label"]))}</span>'
@@ -63,6 +77,7 @@ def ranking(breakdown: dict) -> str:
         </header>
         <p class="asof">{breakdown["year"]} год, {html.escape(breakdown["unit"])},
           источник: {html.escape(breakdown["source"])}</p>
+        {empty}
         <ol>
 {rows}
         </ol>
@@ -74,31 +89,30 @@ def build(data: dict) -> str:
     by_key = {b["id"]: b for b in data.get("breakdowns", [])}
     generated = datetime.fromisoformat(data["generated_at"])
 
-    flow_cards = "\n".join(
-        card(by_id[sid], 2, "годом ранее", 365) for sid in FLOW_ORDER if sid in by_id
-    )
-    invest_cards = "\n".join(
-        card(by_id[sid], 2, "годом ранее", 365) for sid in INVEST_ORDER if sid in by_id
+    # Ряды World Bank приезжают без ошибок, но кончаются позапрошлым годом:
+    # бейдж по одному факту забора называл бы их актуальными.
+    def dated_card(sid: str) -> str:
+        series = by_id[sid]
+        return with_freshness(card(series, 2, "годом ранее", 365), series)
+
+    flow_cards = "\n".join(dated_card(sid) for sid in FLOW_ORDER if sid in by_id)
+    flow_cards = flow_cards or no_data("ряды экспорта и импорта не собрались")
+    invest_cards = "\n".join(dated_card(sid) for sid in INVEST_ORDER if sid in by_id)
+    invest_cards = invest_cards or no_data(
+        "ряды прямых инвестиций и открытости не собрались"
     )
     rankings = "\n".join(
         ranking(by_key[key]) for key in BREAKDOWN_ORDER if key in by_key
     )
+    rankings = rankings or no_data("разрезы по странам и товарным группам не собрались")
 
-    issues = data.get("issues") or []
-    issues_block = ""
-    if issues:
-        items = "".join(f"<li>{html.escape(i)}</li>" for i in issues)
-        issues_block = (
-            '<div class="notice" role="status"><p><strong>Часть данных не обновилась '
-            "в последнем прогоне.</strong> Показаны предыдущие значения.</p>"
-            f"<ul>{items}</ul></div>"
-        )
+    issues_block = issues_notice(data.get("issues"))
 
     return TEMPLATE.format(
         meta=meta_tags('Внешняя торговля Казахстана: экспорт, импорт, партнёры и товарные группы', 'Экспорт и импорт Казахстана, сальдо, прямые инвестиции и структура торговли по странам и товарным группам. Данные World Bank и UN Comtrade с автоматическим обновлением.', '/macroradar/trade/'),
         header=site_header('trade'),
         cta=cta_block(),
-        style=STYLE + HEADER_STYLE + CTA_STYLE + RANKING_STYLE,
+        style=STYLE + HEADER_STYLE + CTA_STYLE + RANKING_STYLE + NO_DATA_STYLE,
         generated_human=generated.strftime("%d.%m.%Y %H:%M UTC"),
         generated_iso=generated.isoformat(),
         flow_cards=flow_cards,

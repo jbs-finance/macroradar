@@ -15,7 +15,20 @@ import json
 import sys
 from datetime import date, datetime
 from pathlib import Path
-from layout import CTA_STYLE, HEADER_STYLE, cta_block, dataset_jsonld, meta_tags, site_header
+from layout import (
+    CTA_STYLE,
+    HEADER_STYLE,
+    FRESH_BADGE,
+    NO_DATA_STYLE,
+    cta_block,
+    dataset_jsonld,
+    freshness_badge,
+    issues_notice,
+    meta_tags,
+    no_data,
+    site_header,
+    with_freshness,
+)
 
 from build_pulse import (
     BNS_ORDER,
@@ -67,6 +80,7 @@ RADAR_STYLE = """
 .feed li { display: grid; grid-template-columns: 6.5rem 1fr; gap: 0.75rem; padding: 0.55rem 0; border-top: 1px solid var(--muted);
   font-size: 0.9rem; align-items: baseline; }
 .feed li:first-child { border-top: 0; }
+.feed em.soon { font-style: normal; color: var(--muted-fg); }
 .feed time { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.8125rem; color: var(--muted-fg); white-space: nowrap; }
 .feed .kind { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-inline-end: 0.45rem; vertical-align: middle; }
 .kind-rate { background: var(--accent); } .kind-inflation { background: var(--down); } .kind-fx { background: var(--up); }
@@ -108,7 +122,7 @@ def range_markup(series: dict, digits: int) -> str:
     obs = window(series["obs"], series["freq"])
     values = [o["value"] for o in obs]
     if len(values) < 3:
-        return ""
+        return no_data(f"точек за {RANGE_YEARS} лет меньше трёх, диапазон не строится")
     lo, hi = min(values), max(values)
     span = hi - lo or 1
     pos = (values[-1] - lo) / span * 100
@@ -143,10 +157,8 @@ def scan_card(series: dict, digits: int, period_label: str, signal: str) -> str:
             f'<p class="delta delta-{tone}"><span class="delta-value">{sign}{fmt_num(change, 1)}%</span> '
             f'<span class="delta-note">{word}, чем {period_label}</span></p>'
         )
-    badge = (
-        '<span class="badge badge-stale">данные устарели</span>'
-        if series.get("stale")
-        else '<span class="badge badge-fresh">актуально</span>'
+    badge = freshness_badge(
+        last["date"], series.get("freq", "M"), bool(series.get("stale"))
     )
     signal_html = f'<p class="signal">{html.escape(signal)}</p>' if signal else ""
     return f"""      <article class="card">
@@ -171,8 +183,11 @@ def events_markup(events: list[dict]) -> str:
     if not events:
         return '<p class="empty">За последние полтора месяца заметных изменений не было.</p>'
     items = "\n".join(
-        f'          <li><time datetime="{e["date"]}">{fmt_date(e["date"])}</time>'
-        f'<span><span class="kind kind-{html.escape(e["kind"])}"></span>{html.escape(e["text"])}</span></li>'
+        f'          <li><time datetime="{e["date"]}"'
+        f'{" data-upcoming" if e.get("upcoming") else ""}>{fmt_date(e["date"])}</time>'
+        f'<span><span class="kind kind-{html.escape(e["kind"])}"></span>'
+        f'{html.escape(e["text"])}'
+        f'{" <em class=\"soon\">(решение уже объявлено)</em>" if e.get("upcoming") else ""}</span></li>'
         for e in events
     )
     return f"        <ol>\n{items}\n        </ol>"
@@ -191,19 +206,29 @@ def calendar_markup(calendar: list[dict]) -> str:
     return f"        <ol>\n{items}\n        </ol>"
 
 
+def aged_badge(last: str | None, freq: str, stale: bool) -> str:
+    """Бейдж только при проблеме: у соседей и деловой активности его нет, пока
+    данные свежие, и заводить там постоянную отметку «актуально» незачем."""
+    badge = freshness_badge(last, freq, stale)
+    return "" if badge == FRESH_BADGE else " " + badge
+
+
 def peers_markup(groups: list[dict]) -> str:
     """Сравнение с соседями. Казахстан подсвечен, порядок задан смыслом показателя:
     у инфляции лучше меньше, у роста и дохода на душу больше."""
     if not groups:
-        return ""
+        return no_data("сравнение с соседями не собралось")
     blocks = []
     for g in groups:
         items = g.get("items") or []
         if not items:
+            blocks.append(
+                no_data(f"{g.get('name_ru', 'показатель')}: строк по странам нет")
+            )
             continue
         top = max(abs(i["value"]) for i in items) or 1
         year = items[0].get("year", "")
-        stale = ' <span class="badge badge-stale">данные устарели</span>' if g.get("stale") else ""
+        stale = aged_badge(str(items[0].get("year", "")), "A", bool(g.get("stale")))
         rows = "\n".join(
             f'          <li class="{"kz" if i.get("is_kz") else ""}">'
             f'<span>{html.escape(str(i["country"]))}</span>'
@@ -220,7 +245,7 @@ def peers_markup(groups: list[dict]) -> str:
         </ol>
       </article>"""
         )
-    return "\n".join(blocks)
+    return "\n".join(blocks) or no_data("сравнение с соседями не собралось")
 
 
 def share_description(radar: dict, by_id: dict) -> str:
@@ -249,7 +274,7 @@ def business_activity_markup(bai: dict | None, signal: str) -> str:
     нейтральной отметки 50. Полосы растут от неё в обе стороны, потому что смысл
     показателя не в величине, а в стороне от порога."""
     if not bai:
-        return ""
+        return no_data("индекс деловой активности не собрался")
     sectors = bai.get("sectors") or []
     rows = []
     for s in sectors:
@@ -262,7 +287,7 @@ def business_activity_markup(bai: dict | None, signal: str) -> str:
             f'<span class="scale"><span class="mid"></span>'
             f'<span class="fill fill-{side}" style="width: {width:.1f}%"></span></span></li>'
         )
-    stale = ' <span class="badge badge-stale">данные устарели</span>' if bai.get("stale") else ""
+    stale = aged_badge(bai.get("month"), "M", bool(bai.get("stale")))
     climate = (
         f'<p class="asof">Индекс бизнес-климата {fmt_num(bai["climate"], 1)}</p>'
         if bai.get("climate") is not None
@@ -318,33 +343,27 @@ def build(radar: dict, pulse: dict, trade: dict) -> str:
             f"{fmt_date(next_rate['date'])}, {when}</p>"
         )
 
-    issues = (radar.get("issues") or []) + (pulse.get("issues") or [])
-    issues_block = ""
-    if issues:
-        items = "".join(f"<li>{html.escape(i)}</li>" for i in issues)
-        issues_block = (
-            '<div class="notice" role="status"><p><strong>Часть данных не обновилась '
-            "в последнем прогоне.</strong> Показаны предыдущие значения.</p>"
-            f"<ul>{items}</ul></div>"
-        )
-
-    fx_cards = "\n".join(
-        card(by_id[s], digits_for(s), "год назад", 365) for s in FX_ORDER if s in by_id
+    issues_block = issues_notice(
+        (radar.get("issues") or []) + (pulse.get("issues") or [])
     )
+
+    # Карточку рисует общий build_pulse.card, он ставит бейдж по факту забора.
+    # with_freshness уточняет его возрастом последней точки ряда.
+    def dated_card(sid: str, label: str) -> str:
+        series = by_id[sid]
+        return with_freshness(card(series, digits_for(sid), label, 365), series)
+
+    fx_cards = "\n".join(dated_card(s, "год назад") for s in FX_ORDER if s in by_id)
     macro_cards = "\n".join(
-        card(by_id[s], digits_for(s), "годом ранее", 365)
-        for s in MACRO_ORDER
-        if s in by_id
+        dated_card(s, "годом ранее") for s in MACRO_ORDER if s in by_id
     )
     bns_cards = "\n".join(
-        card(by_id[s], digits_for(s), "годом ранее", 365)
-        for s in BNS_ORDER
-        if s in by_id
+        dated_card(s, "годом ранее") for s in BNS_ORDER if s in by_id
     )
 
     all_series = list(pulse.get("series", [])) + list(radar.get("series", []))
     return TEMPLATE.format(
-        style=STYLE + HEADER_STYLE + RADAR_STYLE + CTA_STYLE,
+        style=STYLE + HEADER_STYLE + RADAR_STYLE + CTA_STYLE + NO_DATA_STYLE,
         meta=meta_tags(
             "Радар экономики Казахстана: ставка, инфляция, курс, оплата труда",
             share_description(radar, by_id),

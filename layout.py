@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import html
 import json
+from calendar import monthrange
+from datetime import date
 
 SITE = "https://jbs.finance"
 
@@ -165,3 +167,110 @@ def dataset_jsonld(
         )
         + "</script>"
     )
+
+
+NO_DATA_STYLE = """
+.no-data { background: var(--muted); border-radius: var(--radius); padding: 0.85rem 1.1rem;
+  margin-block: 1rem; font-size: 0.875rem; color: var(--muted-fg); }
+.no-data b { color: var(--fg); font-weight: 600; }
+"""
+
+
+def no_data(reason: str) -> str:
+    """Заглушка вместо пустой секции.
+
+    Заголовки и вводные абзацы стоят в шаблонах статически, поэтому пустая строка
+    вместо блока оставляет заголовок висеть над пустотой: читается как сломанная
+    вёрстка, а не как отсутствие данных. Пустоты быть не должно, должна быть
+    названная причина.
+    """
+    return f'<p class="no-data"><b>Данные не собрались:</b> {html.escape(reason)}</p>'
+
+
+ISSUES_INTRO = (
+    "<strong>Часть данных не обновилась в последнем прогоне.</strong> "
+    "Показаны предыдущие значения."
+)
+
+
+def issues_notice(issues: list[str] | None, intro: str = ISSUES_INTRO) -> str:
+    """Список того, что не собралось. Разметка общая для всех страниц радара."""
+    if not issues:
+        return ""
+    items = "".join(f"<li>{html.escape(i)}</li>" for i in issues)
+    return f'<div class="notice" role="status"><p>{intro}</p><ul>{items}</ul></div>'
+
+
+# Разумный лаг последней точки по частоте ряда, в днях. Дневной ряд, отставший на
+# неделю, уже не актуален, а годовому отстать на год нормально: он так и выходит.
+MAX_AGE_DAYS = {"D": 7, "M": 60, "Q": 150, "A": 500}
+DEFAULT_MAX_AGE_DAYS = 60
+
+FRESH_BADGE = '<span class="badge badge-fresh">актуально</span>'
+STALE_BADGE = '<span class="badge badge-stale">данные устарели</span>'
+
+
+def parse_point_date(raw: str | None) -> date | None:
+    """Дата точки ряда. Источники пишут её тремя способами: «2024», «2026-07» и
+    «2026-09-02». Неполная дата разворачивается в конец периода, иначе годовой ряд
+    считался бы просроченным на весь свой год."""
+    if not raw:
+        return None
+    parts = str(raw).strip().split("-")
+    try:
+        year = int(parts[0])
+        month = int(parts[1]) if len(parts) > 1 else 12
+        day = int(parts[2]) if len(parts) > 2 else monthrange(year, month)[1]
+        return date(year, month, day)
+    except (ValueError, IndexError):
+        return None
+
+
+def is_outdated(last: str | None, freq: str, today: date | None = None) -> bool:
+    """Последняя точка старше лага, положенного её частоте."""
+    point = parse_point_date(last)
+    if point is None:
+        return False
+    today = today or date.today()
+    return (today - point).days > MAX_AGE_DAYS.get(freq, DEFAULT_MAX_AGE_DAYS)
+
+
+def freshness_badge(
+    last: str | None,
+    freq: str,
+    stale: bool = False,
+    today: date | None = None,
+) -> str:
+    """Бейдж свежести по двум признакам сразу.
+
+    Признак `stale` говорит только о том, что забор данных не удался. Ряд, который
+    забрался без ошибок, но кончается 2024 годом, по нему проходит как актуальный.
+    Поэтому второй критерий: возраст самой последней точки.
+    """
+    if stale:
+        return STALE_BADGE
+    if is_outdated(last, freq, today):
+        return f'<span class="badge badge-stale">устарело: {html.escape(str(last))}</span>'
+    return FRESH_BADGE
+
+
+def series_badge(series: dict, today: date | None = None) -> str:
+    """Бейдж свежести ряда: частота и дата последней точки берутся из него самого."""
+    obs = series.get("obs") or []
+    return freshness_badge(
+        obs[-1]["date"] if obs else None,
+        series.get("freq", "M"),
+        bool(series.get("stale")),
+        today,
+    )
+
+
+def with_freshness(markup: str, series: dict, today: date | None = None) -> str:
+    """Уточнить бейдж в уже собранной карточке ряда.
+
+    Карточки рядов рисует общий для всех страниц build_pulse.card, и он ставит
+    бейдж по одному лишь факту успешного забора. Здесь готовая разметка правится
+    по возрасту точки, чтобы не разводить две конвенции оформления карточек.
+    """
+    badge = series_badge(series, today)
+    return markup.replace(FRESH_BADGE, badge) if badge != FRESH_BADGE else markup

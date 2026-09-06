@@ -214,6 +214,15 @@ def chart_svg(
                 f"<title>{MONTH_CASE[i]} {series_year}: {fmt_num(value, 0)} млрд тенге"
                 f"</title></rect>"
             )
+    if not points:
+        # Сетка без единого столбика выглядит как график с нулями. Пометка стоит
+        # внутри SVG, потому что снаружи её негде показать: график вставляется
+        # в разметку как готовый элемент.
+        parts.append(
+            f'<text class="axis" x="{PAD_L + inner_w / 2:.1f}" '
+            f'y="{PAD_T + inner_h / 2:.1f}" text-anchor="middle">'
+            "нет данных за этот период</text>"
+        )
     parts.append("</svg>")
     return "".join(parts)
 
@@ -231,8 +240,15 @@ def series_stats(
         base = sum(p for _, p in pairs)
         yoy = (sum(v for v, _ in pairs) / base - 1) * 100 if base else None
 
-    cells = [("За год", f"{fmt_num(total, 0)}", "")]
-    cells.append((f"Пик · {MONTH_CASE[peak_i]}", fmt_num(values[peak_i] or 0, 0), ""))
+    # Двенадцать пустых месяцев это отсутствие отчёта, а не нулевые поступления:
+    # «За год 0» и «Пик · январь 0» читаются как настоящие числа.
+    if not any(values):
+        cells = [("За год", "нет данных", ""), ("Пик", "нет данных", "")]
+    else:
+        cells = [("За год", f"{fmt_num(total, 0)}", "")]
+        cells.append(
+            (f"Пик · {MONTH_CASE[peak_i]}", fmt_num(values[peak_i] or 0, 0), "")
+        )
     if yoy is not None:
         sign = "+" if yoy > 0 else ""
         tone = "up" if yoy > 0 else "down" if yoy < 0 else ""
