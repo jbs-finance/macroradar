@@ -3,6 +3,7 @@
 import json
 import re
 from datetime import date, timedelta
+from pathlib import Path
 
 import pytest
 from build_pulse import build, fmt_date, fmt_num, fx_row, pct_change, spark
@@ -142,13 +143,12 @@ class TestBuildDocument:
         visible = re.sub(r"<[^>]+>", " ", visible)
         assert EM_DASH not in visible and EN_DASH not in visible
 
-    def test_real_dataset_builds_if_present(self):
-        """Гейт на живом файле: если ETL отработал, страница должна собраться."""
+    def test_real_dataset_builds(self):
+        """Гейт на настоящей выгрузке: свежая из out, иначе снимок из fixtures."""
         from build_pulse import DATASET
 
-        if not DATASET.exists():
-            pytest.skip("out/pulse.json ещё не собран")
-        page = build(json.loads(DATASET.read_text(encoding="utf-8")))
+        dataset = DATASET if DATASET.exists() else Path(__file__).parent / "fixtures" / "pulse.json"
+        page = build(json.loads(dataset.read_text(encoding="utf-8")))
         assert len(page) > 5000
 
 
