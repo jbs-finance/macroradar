@@ -16,8 +16,8 @@ DATASET = HERE / "out" / "national_fund.json"
 DEFAULT_OUT = HERE / "out" / "national_fund.html"
 
 FUND_STYLE = """
-.fund-hero { padding-block: clamp(2.5rem, 7vw, 5rem) 2rem; max-width: 760px; }
-.fund-hero h1 { max-width: 12ch; font-family: Georgia, "Times New Roman", serif; font-size: clamp(2.5rem, 6vw, 4.8rem); letter-spacing: -0.045em; line-height: 0.98; }
+.fund-hero { padding-block: clamp(1.5rem, 4vw, 2.5rem) 1.25rem; max-width: 760px; }
+.fund-hero h1 { max-width: 22ch; font-family: Georgia, "Times New Roman", serif; font-size: clamp(1.75rem, 4vw, 2.5rem); letter-spacing: -0.025em; line-height: 1.15; }
 .fund-hero .lede { max-width: 58ch; font-size: 1.1rem; line-height: 1.55; }
 .fund-summary { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 1px; margin-bottom: 3rem; background: var(--muted); border: 1px solid var(--muted); }
 .fund-stat { padding: clamp(1rem, 2.4vw, 1.65rem); background: var(--card); }

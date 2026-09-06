@@ -36,26 +36,27 @@ HUB_STYLE = """
 body { margin: 0; background: var(--bg); color: var(--fg);
   font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
 .wrap { max-width: 1120px; margin-inline: auto; padding-inline: clamp(1rem, 4vw, 2.5rem); }
-.radar-hero { padding-block: clamp(2.5rem, 8vw, 5.75rem) clamp(2rem, 5vw, 3.5rem); max-width: 900px; }
+.radar-hero { padding-block: clamp(1.75rem, 4vw, 2.75rem) clamp(1.25rem, 3vw, 1.75rem); max-width: 900px; }
 .eyebrow { display: inline-flex; align-items: center; gap: .55rem; margin: 0 0 1rem; color: var(--accent); font-size: .75rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
 .eyebrow::before { content: ""; width: 1.8rem; height: 2px; background: currentColor; }
-.radar-hero h1 { max-width: 15ch; font-family: Georgia, "Times New Roman", serif; font-size: clamp(2.4rem, 6.5vw, 5.2rem); letter-spacing: -.045em; line-height: .98; margin-bottom: 1.25rem; }
-.radar-hero .lede { max-width: 52ch; font-size: clamp(1.05rem, 1.6vw, 1.3rem); line-height: 1.55; }
+.radar-hero h1 { max-width: 24ch; font-family: Georgia, "Times New Roman", serif; font-size: clamp(2rem, 4.2vw, 3rem); letter-spacing: -.03em; line-height: 1.06; margin-bottom: .75rem; }
+.radar-hero .lede { max-width: 62ch; font-size: clamp(1rem, 1.2vw, 1.1rem); line-height: 1.5; }
 .reading-note { max-width: 66ch; padding: 1rem 0; border-top: 1px solid var(--line); color: var(--muted-fg); font-size: .9rem; }
-.radar-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 1rem; padding-bottom: clamp(3.5rem, 8vw, 6rem); }
-.radar-card { grid-column: span 6; min-height: 240px; display: flex; flex-direction: column; justify-content: space-between; padding: clamp(1.25rem, 3vw, 2rem); background: var(--card); color: var(--fg); text-decoration: none; border: 1px solid var(--muted); border-top: 3px solid var(--card-tone, var(--accent)); border-radius: var(--radius); }
+.radar-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: .875rem; padding-bottom: clamp(2rem, 4vw, 3rem); }
+.radar-card { grid-column: span 4; min-height: 190px; display: flex; flex-direction: column; justify-content: space-between; padding: clamp(1.25rem, 3vw, 2rem); background: var(--card); color: var(--fg); text-decoration: none; border: 1px solid var(--muted); border-top: 3px solid var(--card-tone, var(--accent)); border-radius: var(--radius); }
 .radar-card:hover, .radar-card:focus-visible { transform: translateY(-4px); box-shadow: 0 14px 26px rgba(44, 36, 32, .11); outline: none; }
 .radar-card--macro { --card-tone: #A8522F; } .radar-card--trade { --card-tone: #2F6B4F; } .radar-card--fund { --card-tone: #2F6B4F; } .radar-card--budget { --card-tone: #8A6A2C; } .radar-card--tax { --card-tone: #755C8C; }
 .card-kicker { margin: 0; color: var(--card-tone); font-size: .75rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
-.radar-card h2 { margin: .35rem 0 .65rem; font-family: Georgia, "Times New Roman", serif; font-size: clamp(1.6rem, 3vw, 2.3rem); letter-spacing: -.025em; line-height: 1.05; }
+.radar-card h2 { margin: .3rem 0 .5rem; font-family: Georgia, "Times New Roman", serif; font-size: clamp(1.35rem, 2vw, 1.7rem); letter-spacing: -.02em; line-height: 1.1; }
 .radar-card p { max-width: 38ch; margin: 0; color: var(--muted-fg); font-size: .95rem; }
-.card-link { display: flex; justify-content: space-between; align-items: center; margin-top: 1.75rem; padding-top: .85rem; border-top: 1px solid var(--muted); color: var(--fg); font-size: .875rem; font-weight: 650; }
+.card-link { display: flex; justify-content: space-between; align-items: center; margin-top: 1.1rem; padding-top: .7rem; border-top: 1px solid var(--muted); color: var(--fg); font-size: .875rem; font-weight: 650; }
 .card-link span:last-child { color: var(--card-tone); font-size: 1.25rem; line-height: 1; }
-.method { padding: clamp(1.25rem, 3vw, 2rem); margin-bottom: 3rem; background: #EDE4D5; border-left: 3px solid var(--accent); }
+.method { padding: clamp(1rem, 2vw, 1.4rem); margin-bottom: 2rem; background: #EDE4D5; border-left: 3px solid var(--accent); }
 .method h2 { margin: 0 0 .5rem; font-family: Georgia, "Times New Roman", serif; font-size: 1.5rem; }
 .method p { max-width: 70ch; margin: 0; color: var(--muted-fg); }
 footer { padding-block: 1.5rem 2.5rem; border-top: 1px solid var(--muted); color: var(--muted-fg); font-size: .8125rem; } footer p { margin: 0; }
-@media (max-width: 640px) { .radar-hero { padding-top: 2.25rem; } .radar-card { grid-column: 1 / -1; min-height: 225px; } }
+@media (max-width: 1000px) { .radar-card { grid-column: span 6; } }
+@media (max-width: 640px) { .radar-hero { padding-top: 1.5rem; } .radar-card { grid-column: 1 / -1; min-height: 170px; } }
 """
 
 SECTIONS = (
