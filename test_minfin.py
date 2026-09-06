@@ -347,7 +347,7 @@ def build_page() -> str:
     import build_budget
 
     budget = json.loads(
-        (Path(__file__).parent / "out" / "budget.json").read_text(encoding="utf-8")
+        (Path(__file__).parent / "fixtures" / "budget.json").read_text(encoding="utf-8")
     )
     return build_budget.build(sample_with_local(), budget)
 

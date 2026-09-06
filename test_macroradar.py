@@ -12,7 +12,7 @@ HERE = Path(__file__).resolve().parent
 
 
 def data(name: str) -> dict:
-    return json.loads((HERE / "out" / name).read_text(encoding="utf-8"))
+    return json.loads((HERE / "fixtures" / name).read_text(encoding="utf-8"))
 
 
 def national_fund() -> dict:

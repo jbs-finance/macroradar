@@ -293,7 +293,7 @@ def test_rates_page_has_no_dashboard():
     import build_tax
 
     data = json.loads(
-        (Path(__file__).parent / "out" / "tax.json").read_text(encoding="utf-8")
+        (Path(__file__).parent / "fixtures" / "tax.json").read_text(encoding="utf-8")
     )
     page = build_tax.build(data)
     assert "Сколько собирают" not in page and "plan-table" not in page

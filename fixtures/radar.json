@@ -1,0 +1,862 @@
+{
+  "generated_at": "2026-09-04T14:39:27+00:00",
+  "series": [
+    {
+      "series_id": "kz.rate.base",
+      "name_ru": "Базовая ставка НБРК",
+      "unit": "% годовых",
+      "freq": "D",
+      "source": "Национальный Банк РК",
+      "source_url": "https://nationalbank.kz/ru/news/grafik-prinyatiya-resheniy-po-bazovoy-stavke",
+      "fetched_at": "2026-09-04T14:39:22+00:00",
+      "obs": [
+        {
+          "date": "2020-02-04",
+          "value": 9.25
+        },
+        {
+          "date": "2020-03-10",
+          "value": 12.0
+        },
+        {
+          "date": "2020-03-17",
+          "value": 12.0
+        },
+        {
+          "date": "2020-04-06",
+          "value": 9.5
+        },
+        {
+          "date": "2020-04-28",
+          "value": 9.5
+        },
+        {
+          "date": "2020-06-09",
+          "value": 9.5
+        },
+        {
+          "date": "2020-07-21",
+          "value": 9.0
+        },
+        {
+          "date": "2020-09-08",
+          "value": 9.0
+        },
+        {
+          "date": "2020-10-27",
+          "value": 9.0
+        },
+        {
+          "date": "2020-12-15",
+          "value": 9.0
+        },
+        {
+          "date": "2021-01-26",
+          "value": 9.0
+        },
+        {
+          "date": "2021-03-10",
+          "value": 9.0
+        },
+        {
+          "date": "2022-01-25",
+          "value": 10.25
+        },
+        {
+          "date": "2022-02-24",
+          "value": 13.5
+        },
+        {
+          "date": "2022-03-10",
+          "value": 13.5
+        },
+        {
+          "date": "2023-01-16",
+          "value": 16.75
+        },
+        {
+          "date": "2023-02-27",
+          "value": 16.75
+        },
+        {
+          "date": "2023-04-10",
+          "value": 16.75
+        },
+        {
+          "date": "2023-05-29",
+          "value": 16.75
+        },
+        {
+          "date": "2023-07-10",
+          "value": 16.75
+        },
+        {
+          "date": "2023-08-28",
+          "value": 16.5
+        },
+        {
+          "date": "2023-10-09",
+          "value": 16.0
+        },
+        {
+          "date": "2023-11-27",
+          "value": 15.75
+        },
+        {
+          "date": "2024-01-22",
+          "value": 15.25
+        },
+        {
+          "date": "2024-02-26",
+          "value": 14.75
+        },
+        {
+          "date": "2024-04-15",
+          "value": 14.75
+        },
+        {
+          "date": "2024-06-03",
+          "value": 14.5
+        },
+        {
+          "date": "2024-07-15",
+          "value": 14.25
+        },
+        {
+          "date": "2024-09-02",
+          "value": 14.25
+        },
+        {
+          "date": "2024-10-14",
+          "value": 14.25
+        },
+        {
+          "date": "2024-12-02",
+          "value": 15.25
+        },
+        {
+          "date": "2025-01-20",
+          "value": 15.25
+        },
+        {
+          "date": "2025-03-11",
+          "value": 16.5
+        },
+        {
+          "date": "2025-04-14",
+          "value": 16.5
+        },
+        {
+          "date": "2025-06-09",
+          "value": 16.5
+        },
+        {
+          "date": "2025-07-14",
+          "value": 16.5
+        },
+        {
+          "date": "2025-09-02",
+          "value": 16.5
+        },
+        {
+          "date": "2025-10-13",
+          "value": 18.0
+        },
+        {
+          "date": "2025-12-01",
+          "value": 18.0
+        },
+        {
+          "date": "2026-01-26",
+          "value": 18.0
+        },
+        {
+          "date": "2026-03-10",
+          "value": 18.0
+        },
+        {
+          "date": "2026-04-27",
+          "value": 18.0
+        },
+        {
+          "date": "2026-06-08",
+          "value": 17.0
+        },
+        {
+          "date": "2026-07-27",
+          "value": 16.75
+        },
+        {
+          "date": "2026-09-07",
+          "value": 16.25
+        }
+      ],
+      "stale": false,
+      "note": "коридор 15,25 - 17,25"
+    },
+    {
+      "series_id": "kz.cpi.monthly",
+      "name_ru": "Инфляция, год к году",
+      "unit": "% к тому же месяцу прошлого года",
+      "freq": "M",
+      "source": "Бюро национальной статистики",
+      "source_url": "https://stat.gov.kz/ru/industries/economy/prices/publications/347964/",
+      "fetched_at": "2026-09-04T14:39:24+00:00",
+      "obs": [
+        {
+          "date": "2024-10",
+          "value": 8.5
+        },
+        {
+          "date": "2024-11",
+          "value": 8.4
+        },
+        {
+          "date": "2025-01",
+          "value": 8.9
+        },
+        {
+          "date": "2025-02",
+          "value": 9.4
+        },
+        {
+          "date": "2025-03",
+          "value": 10.0
+        },
+        {
+          "date": "2025-04",
+          "value": 10.7
+        },
+        {
+          "date": "2025-05",
+          "value": 11.3
+        },
+        {
+          "date": "2025-06",
+          "value": 11.8
+        },
+        {
+          "date": "2025-07",
+          "value": 11.8
+        },
+        {
+          "date": "2025-08",
+          "value": 12.2
+        },
+        {
+          "date": "2025-09",
+          "value": 12.9
+        },
+        {
+          "date": "2025-10",
+          "value": 12.6
+        },
+        {
+          "date": "2025-11",
+          "value": 12.4
+        },
+        {
+          "date": "2026-01",
+          "value": 12.2
+        },
+        {
+          "date": "2026-02",
+          "value": 11.7
+        },
+        {
+          "date": "2026-03",
+          "value": 11.0
+        },
+        {
+          "date": "2026-04",
+          "value": 10.6
+        },
+        {
+          "date": "2026-05",
+          "value": 10.4
+        },
+        {
+          "date": "2026-06",
+          "value": 10.3
+        },
+        {
+          "date": "2026-07",
+          "value": 10.2
+        },
+        {
+          "date": "2026-08",
+          "value": 9.8
+        }
+      ],
+      "stale": false,
+      "note": ""
+    }
+  ],
+  "inflation": [
+    {
+      "month": "2024-10",
+      "yoy": 8.5,
+      "mom": 0.9,
+      "food": 4.9,
+      "nonfood": 7.8,
+      "services": 14.3,
+      "source_url": "https://stat.gov.kz/ru/industries/economy/prices/publications/184878/",
+      "published": "2024-11-01"
+    },
+    {
+      "month": "2024-11",
+      "yoy": 8.4,
+      "mom": null,
+      "food": 5.4,
+      "nonfood": 8.0,
+      "services": 13.3,
+      "source_url": "https://stat.gov.kz/ru/industries/economy/prices/publications/253699/",
+      "published": "2024-12-02"
+    },
+    {
+      "month": "2025-01",
+      "yoy": 8.9,
+      "mom": 1.1,
+      "food": 5.8,
+      "nonfood": 8.4,
+      "services": 13.8,
+      "source_url": "https://stat.gov.kz/ru/industries/economy/prices/publications/281082/",
+      "published": "2025-02-03"
+    },
+    {
+      "month": "2025-02",
+      "yoy": 9.4,
+      "mom": 1.5,
+      "food": 6.5,
+      "nonfood": 8.7,
+      "services": 14.1,
+      "source_url": "https://stat.gov.kz/ru/industries/economy/prices/publications/281447/",
+      "published": "2025-03-03"
+    },
+    {
+      "month": "2025-03",
+      "yoy": 10.0,
+      "mom": 1.3,
+      "food": 7.6,
+      "nonfood": 9.1,
+      "services": 14.3,
+      "source_url": "https://stat.gov.kz/ru/industries/economy/prices/publications/340833/",
+      "published": "2025-04-01"
+    },
+    {
+      "month": "2025-04",
+      "yoy": 10.7,
+      "mom": 1.2,
+      "food": 8.5,
+      "nonfood": 8.9,
+      "services": 15.7,
+      "source_url": "https://stat.gov.kz/ru/industries/economy/prices/publications/346501/",
+      "published": "2025-05-02"
+    },
+    {
+      "month": "2025-05",
+      "yoy": 11.3,
+      "mom": 0.9,
+      "food": 9.6,
+      "nonfood": 9.0,
+      "services": 16.0,
+      "source_url": "https://stat.gov.kz/ru/industries/economy/prices/publications/387567/",
+      "published": "2025-06-02"
+    },
+    {
+      "month": "2025-06",
+      "yoy": 11.8,
+      "mom": 0.8,
+      "food": 10.6,
+      "nonfood": 9.4,
+      "services": 16.1,
+      "source_url": "https://stat.gov.kz/ru/industries/economy/prices/publications/347709/",
+      "published": "2025-07-01"
+    },
+    {
+      "month": "2025-07",
+      "yoy": 11.8,
+      "mom": 0.7,
+      "food": 11.2,
+      "nonfood": 9.5,
+      "services": 14.9,
+      "source_url": "https://stat.gov.kz/ru/industries/economy/prices/publications/335762/",
+      "published": "2025-08-01"
+    },
+    {
+      "month": "2025-08",
+      "yoy": 12.2,
+      "mom": 1.0,
+      "food": 11.7,
+      "nonfood": 9.7,
+      "services": 15.3,
+      "source_url": "https://stat.gov.kz/ru/industries/economy/prices/publications/347963/",
+      "published": "2025-09-02"
+    },
+    {
+      "month": "2025-09",
+      "yoy": 12.9,
+      "mom": 1.1,
+      "food": 12.7,
+      "nonfood": 10.8,
+      "services": 15.3,
+      "source_url": "https://stat.gov.kz/ru/industries/economy/prices/publications/353603/",
+      "published": "2025-10-01"
+    },
+    {
+      "month": "2025-10",
+      "yoy": 12.6,
+      "mom": 0.5,
+      "food": 13.5,
+      "nonfood": 11.0,
+      "services": 12.9,
+      "source_url": "https://stat.gov.kz/ru/industries/economy/prices/publications/355079/",
+      "published": "2025-11-03"
+    },
+    {
+      "month": "2025-11",
+      "yoy": 12.4,
+      "mom": 0.8,
+      "food": 13.4,
+      "nonfood": 11.2,
+      "services": 12.3,
+      "source_url": "https://stat.gov.kz/ru/industries/economy/prices/publications/358650/",
+      "published": "2025-12-01"
+    },
+    {
+      "month": "2026-01",
+      "yoy": 12.2,
+      "mom": 1.0,
+      "food": 12.9,
+      "nonfood": 11.7,
+      "services": 12.0,
+      "source_url": "https://stat.gov.kz/ru/industries/economy/prices/publications/281083/",
+      "published": "2026-02-02"
+    },
+    {
+      "month": "2026-02",
+      "yoy": 11.7,
+      "mom": 1.1,
+      "food": 12.7,
+      "nonfood": 11.6,
+      "services": 10.8,
+      "source_url": "https://stat.gov.kz/ru/industries/economy/prices/publications/281448/",
+      "published": "2026-03-02"
+    },
+    {
+      "month": "2026-03",
+      "yoy": 11.0,
+      "mom": 0.6,
+      "food": 11.7,
+      "nonfood": 11.3,
+      "services": 10.0,
+      "source_url": "https://stat.gov.kz/ru/industries/economy/prices/publications/480322/",
+      "published": "2026-04-01"
+    },
+    {
+      "month": "2026-04",
+      "yoy": 10.6,
+      "mom": 0.8,
+      "food": 11.3,
+      "nonfood": 11.7,
+      "services": 8.9,
+      "source_url": "https://stat.gov.kz/ru/industries/economy/prices/publications/346502/",
+      "published": "2026-05-04"
+    },
+    {
+      "month": "2026-05",
+      "yoy": 10.4,
+      "mom": 0.7,
+      "food": 10.7,
+      "nonfood": 11.7,
+      "services": 8.7,
+      "source_url": "https://stat.gov.kz/ru/industries/economy/prices/publications/346888/",
+      "published": "2026-06-01"
+    },
+    {
+      "month": "2026-06",
+      "yoy": 10.3,
+      "mom": 0.8,
+      "food": 10.4,
+      "nonfood": 11.7,
+      "services": 9.0,
+      "source_url": "https://stat.gov.kz/ru/industries/economy/prices/publications/347710/",
+      "published": "2026-07-01"
+    },
+    {
+      "month": "2026-07",
+      "yoy": 10.2,
+      "mom": 0.6,
+      "food": 10.1,
+      "nonfood": 11.7,
+      "services": 9.2,
+      "source_url": "https://stat.gov.kz/ru/industries/economy/prices/publications/509832/",
+      "published": "2026-08-03"
+    },
+    {
+      "month": "2026-08",
+      "yoy": 9.8,
+      "mom": 0.6,
+      "food": 9.5,
+      "nonfood": 11.4,
+      "services": 8.9,
+      "source_url": "https://stat.gov.kz/ru/industries/economy/prices/publications/347964/",
+      "published": "2026-09-01"
+    }
+  ],
+  "next_rate_decision": {
+    "date": "2026-10-23",
+    "title": "Решение НБРК по базовой ставке, 12:00 Астаны",
+    "type": "Решение",
+    "url": "https://nationalbank.kz/ru/news/grafik-prinyatiya-resheniy-po-bazovoy-stavke",
+    "kind": "rate"
+  },
+  "calendar": [
+    {
+      "date": "2026-09-04",
+      "title": "Индекс цен и средние цены на социально-значимые продовольственные товары в Республике Казахстан (на 2 сентября 2026г.)",
+      "type": "Электронная таблица",
+      "url": "https://stat.gov.kz/api/iblock/element/478146/file/ru/",
+      "kind": "stat"
+    },
+    {
+      "date": "2026-09-07",
+      "title": "Индексы цен и цены производителей промышленной продукции в Республике Казахстан",
+      "type": "Электронная таблица",
+      "url": "https://stat.gov.kz/ru/release-calendar/",
+      "kind": "stat"
+    },
+    {
+      "date": "2026-09-07",
+      "title": "Индексы цен и цены в строительстве в Республике Казахстан",
+      "type": "Электронная таблица",
+      "url": "https://stat.gov.kz/ru/release-calendar/",
+      "kind": "stat"
+    },
+    {
+      "date": "2026-09-09",
+      "title": "Розничные цены на отдельные товары и услуги в Республике Казахстан",
+      "type": "Электронная таблица",
+      "url": "https://stat.gov.kz/ru/release-calendar/",
+      "kind": "stat"
+    },
+    {
+      "date": "2026-09-10",
+      "title": "Базовый индекс цен производителей промышленной продукции в Республике Казахстан",
+      "type": "Электронная таблица",
+      "url": "https://stat.gov.kz/ru/release-calendar/",
+      "kind": "stat"
+    },
+    {
+      "date": "2026-09-11",
+      "title": "Индекс цен и средние цены на социально-значимые продовольственные товары в Республике Казахстан",
+      "type": "Электронная таблица",
+      "url": "https://stat.gov.kz/ru/release-calendar/",
+      "kind": "stat"
+    },
+    {
+      "date": "2026-09-15",
+      "title": "Внешнеторговый оборот Республики Казахстан",
+      "type": "Публикация",
+      "url": "https://stat.gov.kz/ru/release-calendar/",
+      "kind": "stat"
+    },
+    {
+      "date": "2026-09-15",
+      "title": "Внешнеторговый оборот РК",
+      "type": "Электронная таблица",
+      "url": "https://stat.gov.kz/ru/release-calendar/",
+      "kind": "stat"
+    },
+    {
+      "date": "2026-09-15",
+      "title": "О внешней торговле и взаимной торговле товарами с государствами-членами Евразийского экономического союза",
+      "type": "Электронная таблица",
+      "url": "https://stat.gov.kz/ru/release-calendar/",
+      "kind": "stat"
+    },
+    {
+      "date": "2026-09-15",
+      "title": "Основные показатели внешней торговли Республики Казахстан по странам",
+      "type": "Электронная таблица",
+      "url": "https://stat.gov.kz/ru/release-calendar/",
+      "kind": "stat"
+    },
+    {
+      "date": "2026-09-16",
+      "title": "Основные показатели работы промышленности Республики Казахстан",
+      "type": "Публикация",
+      "url": "https://stat.gov.kz/ru/release-calendar/",
+      "kind": "stat"
+    },
+    {
+      "date": "2026-09-18",
+      "title": "Индекс цен и средние цены на социально-значимые продовольственные товары в Республике Казахстан",
+      "type": "Электронная таблица",
+      "url": "https://stat.gov.kz/ru/release-calendar/",
+      "kind": "stat"
+    },
+    {
+      "date": "2026-09-25",
+      "title": "Индекс цен и средние цены на социально-значимые продовольственные товары в Республике Казахстан",
+      "type": "Электронная таблица",
+      "url": "https://stat.gov.kz/ru/release-calendar/",
+      "kind": "stat"
+    },
+    {
+      "date": "2026-09-28",
+      "title": "Заработная плата наемных работников (с учетом малых предприятий, занимающихся предпринимательской деятельностью)",
+      "type": "Электронная таблица",
+      "url": "https://stat.gov.kz/ru/release-calendar/",
+      "kind": "stat"
+    }
+  ],
+  "neighbours": [
+    {
+      "id": "inflation",
+      "name_ru": "Инфляция",
+      "unit": "% за год",
+      "digits": 1,
+      "lower_is_better": true,
+      "source": "World Bank",
+      "fetched_at": "2026-09-04T14:39:27+00:00",
+      "items": [
+        {
+          "country": "Китай",
+          "value": 0.0595646916565403,
+          "year": "2025",
+          "is_kz": false
+        },
+        {
+          "country": "Грузия",
+          "value": 3.8692132193969,
+          "year": "2025",
+          "is_kz": false
+        },
+        {
+          "country": "Азербайджан",
+          "value": 5.62208788068338,
+          "year": "2025",
+          "is_kz": false
+        },
+        {
+          "country": "Киргизия",
+          "value": 8.21496013406325,
+          "year": "2025",
+          "is_kz": false
+        },
+        {
+          "country": "Россия",
+          "value": 8.71986939402666,
+          "year": "2025",
+          "is_kz": false
+        },
+        {
+          "country": "Узбекистан",
+          "value": 8.79638847052461,
+          "year": "2025",
+          "is_kz": false
+        },
+        {
+          "country": "Казахстан",
+          "value": 11.3879454675914,
+          "year": "2025",
+          "is_kz": true
+        },
+        {
+          "country": "Турция",
+          "value": 34.8811629820306,
+          "year": "2025",
+          "is_kz": false
+        }
+      ]
+    },
+    {
+      "id": "growth",
+      "name_ru": "Рост ВВП",
+      "unit": "% за год",
+      "digits": 1,
+      "lower_is_better": false,
+      "source": "World Bank",
+      "fetched_at": "2026-09-04T14:39:27+00:00",
+      "items": [
+        {
+          "country": "Киргизия",
+          "value": 11.0960203357132,
+          "year": "2025",
+          "is_kz": false
+        },
+        {
+          "country": "Узбекистан",
+          "value": 7.69962477932913,
+          "year": "2025",
+          "is_kz": false
+        },
+        {
+          "country": "Грузия",
+          "value": 7.46161504152039,
+          "year": "2025",
+          "is_kz": false
+        },
+        {
+          "country": "Казахстан",
+          "value": 6.5,
+          "year": "2025",
+          "is_kz": true
+        },
+        {
+          "country": "Китай",
+          "value": 4.95994886240992,
+          "year": "2025",
+          "is_kz": false
+        },
+        {
+          "country": "Турция",
+          "value": 3.60462514082589,
+          "year": "2025",
+          "is_kz": false
+        },
+        {
+          "country": "Азербайджан",
+          "value": 1.44985591122698,
+          "year": "2025",
+          "is_kz": false
+        },
+        {
+          "country": "Россия",
+          "value": 1.00117656925738,
+          "year": "2025",
+          "is_kz": false
+        }
+      ]
+    },
+    {
+      "id": "gdp.pc",
+      "name_ru": "ВВП на душу населения",
+      "unit": "USD",
+      "digits": 0,
+      "lower_is_better": false,
+      "source": "World Bank",
+      "fetched_at": "2026-09-04T14:39:27+00:00",
+      "items": [
+        {
+          "country": "Турция",
+          "value": 18599.4420922378,
+          "year": "2025",
+          "is_kz": false
+        },
+        {
+          "country": "Россия",
+          "value": 17546.609375,
+          "year": "2025",
+          "is_kz": false
+        },
+        {
+          "country": "Казахстан",
+          "value": 14692.1331757237,
+          "year": "2025",
+          "is_kz": true
+        },
+        {
+          "country": "Китай",
+          "value": 13861.970224368,
+          "year": "2025",
+          "is_kz": false
+        },
+        {
+          "country": "Грузия",
+          "value": 9691.53472415196,
+          "year": "2025",
+          "is_kz": false
+        },
+        {
+          "country": "Азербайджан",
+          "value": 7410.72281660142,
+          "year": "2025",
+          "is_kz": false
+        },
+        {
+          "country": "Узбекистан",
+          "value": 3968.2720079072,
+          "year": "2025",
+          "is_kz": false
+        },
+        {
+          "country": "Киргизия",
+          "value": 3080.96893823359,
+          "year": "2025",
+          "is_kz": false
+        }
+      ]
+    }
+  ],
+  "business_activity": {
+    "month": "2026-08",
+    "value": 50.6,
+    "sectors": [
+      {
+        "name": "Строительство",
+        "value": 54.8
+      },
+      {
+        "name": "Производство",
+        "value": 52.1
+      },
+      {
+        "name": "Услуги",
+        "value": 50.9
+      },
+      {
+        "name": "Торговля",
+        "value": 48.8
+      },
+      {
+        "name": "Горнодобыча",
+        "value": 48.6
+      }
+    ],
+    "climate": 10.7,
+    "source": "Национальный Банк РК",
+    "source_url": "https://nationalbank.kz/ru/news/informacionnye-soobshcheniya/20264",
+    "title": "ИДА: деловая активность выросла в строительстве, производстве и сфере услуг",
+    "fetched_at": "2026-09-04T14:39:27+00:00"
+  },
+  "events": [
+    {
+      "date": "2026-09-07",
+      "kind": "rate",
+      "text": "НБРК снизил базовую ставку до 16,25% (было 16,75%)"
+    },
+    {
+      "date": "2026-09-04",
+      "kind": "fx",
+      "text": "Тенге укрепился к доллару на 3,7% за месяц: 455,86 за USD"
+    },
+    {
+      "date": "2026-09-01",
+      "kind": "inflation",
+      "text": "Инфляция за август 2026: 9,8%, ниже прошлого месяца (10,2%). Снижается 10 мес. подряд"
+    },
+    {
+      "date": "2026-08-03",
+      "kind": "inflation",
+      "text": "Инфляция за июль 2026: 10,2%, ниже прошлого месяца (10,3%). Снижается 9 мес. подряд"
+    },
+    {
+      "date": "2026-07-27",
+      "kind": "rate",
+      "text": "НБРК снизил базовую ставку до 16,75% (было 17%)"
+    }
+  ],
+  "signals": {
+    "rate": "Цикл смягчения: 3 снижения подряд. Ставки по кредитам и лизингу пойдут вниз с лагом в один-два квартала. Реальная ставка около 6,4 п.п.: деньги дорогие, а депозиты обгоняют инфляцию.",
+    "inflation": "Почти вдвое выше цели НБРК в 5%: закладывайте индексацию цен и зарплат в бюджет. Услуги дорожают медленнее (8,9%).",
+    "fx": "Тенге укрепился на 17% за год: импортные закупки дешевле, экспортная выручка в тенге меньше. Хороший момент для закупки оборудования.",
+    "growth": "Рост 6,5% заметно выше среднего за десять лет (3,5%): спрос расширяется, конкуренция за кадры растёт.",
+    "wage": "Зарплаты растут вровень с инфляцией (плюс 9,1% номинально).",
+    "exports": "Экспорт вырос на 1,5% за год. Первая товарная группа (минеральное топливо, нефть) даёт 63% из первой десятки: курс тенге по-прежнему зависит от нефти.",
+    "unemployment": "Безработица 4,77%: рынок труда тесный, найм и удержание дорожают.",
+    "business_activity": "Активность выше нейтральной отметки (50,6 против 50), но запас невелик. Ниже нейтральной отметки: торговля, горнодобыча."
+  },
+  "issues": []
+}
