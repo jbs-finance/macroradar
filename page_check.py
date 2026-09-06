@@ -233,7 +233,7 @@ MIN_FUND_ASSETS = 100  # месячных точек активов Нацфон
 MIN_FUND_RETURNS = 8  # годовых точек доходности (10)
 MIN_KGD_REGIONS = 15  # областей в разбивке КГД, всего в стране 20 (21 объект)
 MIN_KGD_MONTHS = 10  # месяцев в помесячном разрезе КГД (12)
-MIN_OBLAST_REGIONS = 8  # областей со своим отчётом об исполнении (12)
+MIN_OBLAST_REGIONS = 20  # регионов в бюллетене Минфина, их ровно двадцать (20)
 MIN_MINFIN_MONTHS = 10  # месяцев в графике исполнения плана (11)
 MIN_MINFIN_KINDS = 5  # видов налогов в структуре поступлений (7)
 MIN_TAX_GROUPS = 5  # групп ставок (5)
@@ -313,7 +313,8 @@ SECTIONS = {
     "budget": (
         Section("Сколько собирают на самом деле", "поступления", numbers=8, charts=1),
         Section("Помесячно, факт против плана", "помесячно план и факт", charts=1),
-        Section("Свежие отчёты областей", "отчёты областей", entries=8),
+        # Регионов в бюллетене всегда двадцать, порог с запасом вниз.
+        Section("Доходы регионов", "доходы регионов", entries=18),
         Section("Кто платит: регионы", "регионы", numbers=8, charts=2),
     ),
     "tax": (
@@ -548,7 +549,7 @@ def json_expectations(relpath: str, payload: dict) -> list[tuple[str, int, int]]
     if relpath == "budget/oblast.json":
         return [
             (
-                "областей со своим отчётом",
+                "регионов в разрезе доходов",
                 size(payload, "regions"),
                 MIN_OBLAST_REGIONS,
             )

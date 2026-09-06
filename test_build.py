@@ -273,7 +273,7 @@ class TestNoDataIsVisible:
         }
         page = build_budget(None, None, oblast)
         assert "Костанайская" in page
-        assert "Свежие отчёты областей" in page
+        assert "Доходы регионов" in page
 
 
 class TestFreshnessByAge:
@@ -358,46 +358,27 @@ class TestZeroIsNotData:
         assert "нет данных за этот период" in svg
 
 
-class TestLaggingRegions:
-    """Регион, отставший на год, не стоит в одном порядке со свежими."""
+class TestRegionRanking:
+    """Все регионы приходят одним периодом, поэтому это рейтинг, а не список."""
 
-    def region(self, name, year, total):
+    def region(self, name, total):
         return {
             "name": name,
             "kind": "full",
-            "year": year,
-            "months": 3,
+            "year": 2026,
+            "months": 7,
             "total": total,
             "taxes": total * 0.6,
             "transfers": total * 0.2,
-            "pct": None,
+            "pct": 96.0,
         }
 
-    def test_older_year_moves_to_separate_list(self):
+    def test_period_named_once_not_in_every_row(self):
         from minfin_block import oblast_section
 
         markup = oblast_section(
-            {
-                "regions": [
-                    self.region("Свежая", 2026, 300.0),
-                    self.region("Отставшая", 2025, 200.0),
-                ]
-            }
+            {"regions": [self.region("Первая", 300.0), self.region("Вторая", 200.0)]}
         )
-        assert "Отчитались за прошлые годы" in markup
-        head, tail = markup.split("Отчитались за прошлые годы")
-        assert "Свежая" in head and "Отставшая" not in head
-        assert "Отставшая" in tail
-
-    def test_all_current_years_keep_one_list(self):
-        from minfin_block import oblast_section
-
-        markup = oblast_section(
-            {
-                "regions": [
-                    self.region("Первая", 2026, 300.0),
-                    self.region("Вторая", 2026, 200.0),
-                ]
-            }
-        )
+        assert markup.count("январь-июль 2026") == 1
+        assert markup.index("Первая") < markup.index("Вторая")
         assert "Отчитались за прошлые годы" not in markup

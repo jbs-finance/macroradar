@@ -1,40 +1,36 @@
-"""Исполнение бюджетов областей по отчётам областных управлений финансов.
+"""Исполнение бюджетов областей из статистического бюллетеня Минфина РК.
 
-Минфин публикует местные бюджеты только сводно по стране, а разбивку по областям
-каждое управление выкладывает у себя на gov.kz. Поэтому здесь обход разделов
-областей: у каждого свой адрес, своя формулировка заголовка и свой ритм публикации.
+Раньше здесь был обход двадцати сайтов областных управлений финансов: у каждого
+свой адрес на gov.kz, своя форма и свой ритм публикации. Собиралось 13 регионов из
+20, периоды у них расходились на годы, и общий порядок из таких цифр не строился.
+
+Минфин публикует то же самое централизованно: в статистическом бюллетене листы
+«табл 12.1» ... «табл 12.20», по одному на регион, плюс сводный «табл 12». Один
+файл в месяц, одинаковый период у всех, план и факт рядом, млн тенге.
 
 Три особенности источника, из-за которых код выглядит именно так:
 
-1. Файлы приходят в zip, а внутри старый формат Excel (BIFF), который читается
-   модулем xls. Встречается и xlsx, поэтому формат определяется по сигнатуре.
-2. В архиве обычно два отчёта: бюджет области целиком и отдельно областной
-   бюджет без районов. Нужен первый, он опознаётся по большим доходам.
-3. Регионы отчитываются вразнобой: часть публикует помесячно, часть отстала на
-   год. Период каждого региона подписывается отдельно, общий рейтинг из таких
-   цифр не строится.
+1. Заголовок документа врёт: три разных выпуска подписаны «April 1, 2026», а
+   свежие приходят с английским названием. Период читается из самого файла.
+2. Подпись внутри листа не совпадает с его именем: на листе «табл 12.15» написано
+   «Таблица 12», на «табл 12.16» написано «Таблица 12.15». Регион определяется по
+   русскому названию в шапке, а не по номеру.
+3. В наименованиях строк встречается мусор «_x000D_» и переносы.
 
 Запуск: .venv/bin/python oblast.py out/oblast.json
 """
 
 from __future__ import annotations
 
-import io
 import json
 import re
 import sys
-import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
-from struct import error as struct_error
 
-from budget import SourceError, as_number, payload_problem
+from budget import SourceError, as_number, download
 from budget import Workbook as XlsxBook
-from budget import download as fetch_document
 from etl import fetch_json
-from minfin import MONTHS_RU, parse_income, report_layout
-from xls import Workbook as XlsBook
-from xls import XlsError
 
 HERE = Path(__file__).resolve().parent
 RAW = HERE / "raw"
@@ -42,476 +38,294 @@ DEFAULT_DATASET = HERE / "out" / "oblast.json"
 
 SITE = "https://www.gov.kz"
 API = f"{SITE}/api/v1/public/content-manager/documents"
-DOC_PAGE = f"{SITE}/memleket/entities"
+# Раздел «Бюджетный процесс» Минфина. Поиск по заголовку не годится: свежие выпуски
+# приходят с английским названием и в русскую выдачу не попадают вовсе.
+BULLETIN_ACTIVITY = 7294
+DOC_PAGE = f"{SITE}/memleket/entities/minfin/documents/details"
 
-# Адреса разделов управлений финансов. Единого правила в них нет, поэтому список
-# собран перебором: у кого-то «-karzhy», у кого-то «-finance».
-REGIONS = [
-    ("aqmola-karzhy", "Акмолинская"),
-    ("aktobe-karzhy", "Актюбинская"),
-    ("atyrau-karzhy", "Атырауская"),
-    ("bko-karzhy", "Западно-Казахстанская"),
-    ("vko-karzhy", "Восточно-Казахстанская"),
-    ("zhambyl-karzhy", "Жамбылская"),
-    ("karaganda-finance", "Карагандинская"),
-    ("kostanai-karzhy", "Костанайская"),
-    ("mangystau-fin", "Мангистауская"),
-    ("pavlodar-karzhy", "Павлодарская"),
-    ("sko-karzhy", "Северо-Казахстанская"),
-    ("turkestan-karzhy", "Туркестанская"),
-    ("abay-finance", "Абай"),
-    ("ulytau-finance", "Улытау"),
-    ("zhetysu-finance", "Жетысу"),
-    ("astana-karzhy", "Астана"),
-    ("almaty-finance-econom", "Алматы"),
-    ("shymkent-karzhy", "Шымкент"),
-    ("almobl-karzhy", "Алматинская"),
-    # Раздел есть, но документов управление пока не публикует: пусть подхватится
-    # само, когда появятся.
-    ("kyzylorda-karzhy", "Кызылординская"),
+# Лист региона: «табл 12.1» ... «табл 12.20». Свод по местным бюджетам это «табл 12»
+# без номера, он используется как контрольная сумма.
+SHEET_RE = re.compile(r"^\s*табл\s*12(?:\.(\d+))?\s*$", re.IGNORECASE)
+
+COL_PLAN = 4
+COL_FACT = 5
+COL_NAME_RU = 6
+
+MONTHS_RU = {
+    "январь": 1,
+    "февраль": 2,
+    "март": 3,
+    "апрель": 4,
+    "май": 5,
+    "июнь": 6,
+    "июль": 7,
+    "август": 8,
+    "сентябрь": 9,
+    "октябрь": 10,
+    "ноябрь": 11,
+    "декабрь": 12,
+}
+
+# Категории доходов верхнего уровня. Код нужен рендеру: «1» это налоговая часть.
+INCOME_ROWS = [
+    ("1", "Налоговые поступления"),
+    ("2", "Неналоговые поступления"),
+    ("3", "Поступления от продажи основного капитала"),
+    ("4", "Специальные поступления"),
+    ("5", "Поступления трансфертов"),
 ]
 
-# «на 1 августа 2026 года» и «на 01.08.2026г.» встречаются одинаково часто.
-DATE_WORDS = re.compile(r"на\s+1\s+(\w+)\s+(\d{4})", re.IGNORECASE)
-DATE_DIGITS = re.compile(r"на\s+0?1[.\-/](\d{1,2})[.\-/](\d{4})")
-IS_REPORT = re.compile(r"(отчет|отчёт|исполнени)", re.IGNORECASE)
-NOT_REPORT = re.compile(
-    r"(гражданск|паспорт|аналитическ|антикоррупц|протокол|кассовом исполнении)",
-    re.IGNORECASE,
-)
-PRESENTATION_TITLE = re.compile(r"гражданский\s+бюджет", re.IGNORECASE)
+TOTAL_ROW = "I. ДОХОДЫ"
+SUMMARY_TITLE = "ИСПОЛНЕНИЕ МЕСТНЫХ БЮДЖЕТОВ"
 
-MAX_PAGES = 8
-MIN_INCOME = 5.0  # млрд тенге: меньше бывает только у отчёта одного учреждения
-MIN_CATEGORIES = 3  # разобрана хотя бы половина категорий доходов
-MAX_AGE_MONTHS = 18  # отчёт старше полутора лет уже не «свежая картина»
-MAX_CANDIDATES = 6  # сколько документов региона пробовать, прежде чем сдаться
+# Бюллетень пишет названия сокращённо и капсом. На странице они должны выглядеть
+# так же, как в остальных блоках радара.
+REGION_NAMES = {
+    "АКМОЛИНСКАЯ ОБЛАСТЬ": ("Акмолинская", "aqmola"),
+    "АКТЮБИНСКАЯ ОБЛАСТЬ": ("Актюбинская", "aktobe"),
+    "АЛМАТИНСКАЯ ОБЛАСТЬ": ("Алматинская", "almaty-obl"),
+    "АТЫРАУСКАЯ ОБЛАСТЬ": ("Атырауская", "atyrau"),
+    "ВОСТ-КАЗАХСТАНСКАЯ ОБЛАСТЬ": ("Восточно-Казахстанская", "vko"),
+    "ЖАМБЫЛСКАЯ ОБЛАСТЬ": ("Жамбылская", "zhambyl"),
+    "ЗАП-КАЗАХСТАНСКАЯ ОБЛАСТЬ": ("Западно-Казахстанская", "zko"),
+    "КАРАГАНДИНСКАЯ ОБЛАСТЬ": ("Карагандинская", "karaganda"),
+    "КЫЗЫЛОРДИНСКАЯ ОБЛАСТЬ": ("Кызылординская", "kyzylorda"),
+    "КОСТАНАЙСКАЯ ОБЛАСТЬ": ("Костанайская", "kostanay"),
+    "МАНГИСТАУСКАЯ ОБЛАСТЬ": ("Мангистауская", "mangystau"),
+    "ПАВЛОДАРСКАЯ ОБЛАСТЬ": ("Павлодарская", "pavlodar"),
+    "СЕВ-КАЗАХСТАНСКАЯ ОБЛАСТЬ": ("Северо-Казахстанская", "sko"),
+    "ТУРКЕСТАНСКАЯ ОБЛАСТЬ": ("Туркестанская", "turkestan"),
+    "Г.ШЫМКЕНТ": ("Шымкент", "shymkent"),
+    "Г.АЛМАТЫ": ("Алматы", "almaty"),
+    "Г.АСТАНА": ("Астана", "astana"),
+    "ОБЛАСТЬ ЖЕТІСУ": ("Жетысу", "zhetysu"),
+    "ОБЛАСТЬ АБАЙ": ("Абай", "abai"),
+    "ОБЛАСТЬ УЛЫТАУ": ("Улытау", "ulytau"),
+}
 
-# Списки документов gov.kz весят десятки мегабайт: в поле full_text лежит
-# полный текст каждой карточки. Общий потолок ответа их обрезает, а обрезанный
-# JSON выглядит как битый источник.
-LISTING_MAX_BODY = 128 * 1024 * 1024
-
-
-def api_json(url: str, timeout: int = 45):
-    """Список документов управления. Ретраи обязательны: обход идёт по 24 региона
-    в восемь страниц одиночными запросами, и одна сетевая икота без повтора
-    выбрасывала регион целиком."""
-    return fetch_json(url, timeout=timeout, max_body=LISTING_MAX_BODY)
-
-
-def parse_period(title: str) -> tuple[int, int] | None:
-    """Отчётная дата из заголовка: «на 1 августа 2026» -> покрытый период."""
-    if NOT_REPORT.search(title) or not IS_REPORT.search(title):
-        return None
-    return date_period(title)
+# Расхождение суммы регионов со сводом больше этого означает, что лист прочитан
+# неверно: публиковать такое нельзя.
+SUMMARY_TOLERANCE = 0.02
 
 
-def presentation_period(title: str) -> tuple[int, int] | None:
-    """Период презентации «Гражданский бюджет» Алматы."""
-    if not PRESENTATION_TITLE.search(title):
-        return None
-    return date_period(title)
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def date_period(title: str) -> tuple[int, int] | None:
-    """Период отчёта из даты в заголовке."""
-    m = DATE_WORDS.search(title)
-    if m:
-        month = MONTHS_RU.get(m.group(1).lower())
-        year = int(m.group(2))
-    else:
-        m = DATE_DIGITS.search(title)
-        if not m:
-            return None
-        month, year = int(m.group(1)), int(m.group(2))
-    if not month or not 1 <= month <= 12:
-        return None
-    # Отчёт «на 1 августа» покрывает январь-июль.
-    return (year - 1, 12) if month == 1 else (year, month - 1)
+def clean(text: str) -> str:
+    """Наименование строки: источник кладёт в ячейку «_x000D_» и переносы."""
+    return re.sub(r"\s+", " ", re.sub(r"_x000D_|\r|\n", " ", str(text))).strip()
 
 
-def region_reports(slug: str) -> list[dict]:
-    """Отчёты региона со свежих, по одному на период.
-
-    Перебор нужен потому, что в один месяц управление выкладывает и таблицу, и
-    текстовую справку, и презентацию: разобрать удаётся не первое попавшееся."""
-    found: list[dict] = []
-    for page in range(MAX_PAGES):
-        chunk = api_json(f"{API}?projects={slug}&size=100&page={page}")
-        if not chunk:
-            break
-        for row in chunk:
-            title = row.get("title") or ""
-            period = parse_period(title)
-            if slug == "almaty-finance-econom" and not period:
-                period = presentation_period(title)
-            if not period:
-                continue
-            files = [f for f in (row.get("full_text") or []) if f.get("document")]
-            if not files:
-                continue
-            candidate = {
-                "id": row.get("id"),
-                "year": period[0],
-                "months": period[1],
-                "title": title.strip(),
-                "published": (row.get("created_date") or "")[:10],
-                # Ссылка на файл берётся из списка: карточка документа у областей
-                # приходит пустой, в отличие от документов Минфина.
-                "document": files[0]["document"],
-            }
-            found.append(candidate)
-        if len(chunk) < 100:
-            break
+def bulletins() -> list[dict]:
+    """Выпуски бюллетеня, свежие первыми."""
+    rows = fetch_json(
+        f"{API}?activities={BULLETIN_ACTIVITY}&size=2000", "minfin_bulletins.json"
+    )
+    if not isinstance(rows, list):
+        raise SourceError("список бюллетеней вернулся не списком")
+    found = [
+        row
+        for row in rows
+        if re.search(r"бюллетень|bulletin", str(row.get("title") or ""), re.IGNORECASE)
+        and (row.get("full_text") or [])
+    ]
     if not found:
-        raise SourceError("нет отчётов об исполнении бюджета")
-    found.sort(key=lambda c: (c["year"], c["months"], c["published"]), reverse=True)
-    return found[:MAX_CANDIDATES]
+        raise SourceError("в разделе бюджетного процесса нет бюллетеней")
+    found.sort(key=lambda row: row.get("id") or 0, reverse=True)
+    return found
 
 
-def download(slug: str, report: dict) -> bytes:
-    """Вложение отчёта. Кэш здесь бессрочный, поэтому проверяется сигнатурой: тело
-    страницы ошибки, попавшее в raw/, жило бы там и после того, как сайт ожил."""
-    RAW.mkdir(parents=True, exist_ok=True)
-    # В имени нужен идентификатор документа: за один месяц управление выкладывает
-    # и таблицу, и справку, и презентацию, а кэш по месяцу оставлял только первую.
-    path = (
-        RAW
-        / f"oblast_{slug}_{report['year']}_{report['months']:02d}_{report['id']}.bin"
-    )
-    if path.exists():
-        raw = path.read_bytes()
-        if payload_problem(raw, "document", 3000) is None:
-            return raw
-        path.unlink(missing_ok=True)  # кэш испорчен прошлым сбоем источника
-    return fetch_document(
-        SITE + report["document"], path, min_size=3000, expect="document"
-    )
+def fetch_bulletin(report: dict) -> XlsxBook:
+    link = report["full_text"][0].get("document")
+    if not link:
+        raise SourceError(f"у выпуска {report.get('id')} нет файла")
+    path = RAW / f"minfin_bulletin_{report['id']}.bin"
+    return XlsxBook(download(SITE + link, path, min_size=100_000, expect="xlsx"))
 
 
-def books(raw: bytes):
-    """Книги внутри вложения: файл может быть архивом, xls или xlsx."""
-    if raw[:2] == b"PK":
-        try:
-            archive = zipfile.ZipFile(io.BytesIO(raw))
-            names = archive.namelist()
-        except zipfile.BadZipFile:
-            return
-        # Книгу от простого архива отличает содержимое, а не первые байты: у части
-        # файлов запись xl/workbook.xml лежит дальше начала, и они уходили в разбор
-        # как архив, теряясь целиком.
-        if "xl/workbook.xml" in names:
-            try:
-                yield XlsxBook(raw)
-            except (SourceError, KeyError, ValueError, zipfile.BadZipFile):
-                pass
-            return
-        for info in archive.infolist():
-            if info.file_size:
-                yield from books(archive.read(info.filename))
-        return
-    if raw[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1":
-        try:
-            yield XlsBook(raw)
-        except (XlsError, KeyError, ValueError, struct_error):
-            return
+def parse_period(rows: list[list[str]]) -> tuple[int, int]:
+    """Год и число закрытых месяцев из шапки колонки отчёта.
 
-
-# --- Текстовые отчёты в Word ---------------------------------------------------
-
-WORD_TEXT = re.compile(r"<w:t[^>]*>([^<]*)</w:t>")
-PPTX_TEXT = re.compile(r"<a:t[^>]*>([^<]*)</a:t>")
-# Форматирование рвёт числа пробелами: «7 25 , 6» это 725,6, а «202 6» это 2026.
-GLUED = re.compile(r"(?<=\d)\s+(?=[\d,])|(?<=,)\s+(?=\d)")
-
-BILLIONS = r"([\d]+(?:[.,]\d+)?)\s*млрд"
-TOTAL_PATTERN = re.compile(
-    r"плане на отчетный период по поступлениям\s*"
-    + BILLIONS
-    + r".{0,80}?исполнение составило\s*"
-    + BILLIONS,
-    re.IGNORECASE | re.DOTALL,
-)
-OWN_PATTERN = re.compile(
-    r"собственные доходы при плане на отчетный период\s*"
-    + BILLIONS
-    + r".{0,80}?исполнены на\s*"
-    + BILLIONS,
-    re.IGNORECASE | re.DOTALL,
-)
-PRESENTATION_NUMBER = r"([\d\s]+(?:[.,]\s*\d+)?)"
-PRESENTATION_INCOME = re.compile(PRESENTATION_NUMBER + r"\s+ДОХОДЫ\b", re.IGNORECASE)
-PRESENTATION_TAXES = re.compile(
-    r"Налоговые\s+поступления\s+" + PRESENTATION_NUMBER, re.IGNORECASE
-)
-PRESENTATION_TRANSFERS = re.compile(
-    r"Трансферты\s+" + PRESENTATION_NUMBER, re.IGNORECASE
-)
-PRESENTATION_MILLIONS = re.compile(r"МЛН\.?\s*ТЕНГЕ", re.IGNORECASE)
-
-
-def word_text(raw: bytes) -> str:
-    """Плоский текст документа Word с починенными числами."""
-    try:
-        document = zipfile.ZipFile(io.BytesIO(raw)).read("word/document.xml")
-    except (zipfile.BadZipFile, KeyError):
-        return ""
-    plain = " ".join(WORD_TEXT.findall(document.decode("utf-8", "ignore")))
-    return GLUED.sub("", " ".join(plain.split()))
-
-
-def parse_word_report(raw: bytes) -> dict | None:
-    """Часть управлений публикует исполнение бюджета прозой, без таблиц.
-
-    Берутся всего две величины, зато проверяемые: поступления всего и собственные
-    доходы, каждая со своим планом. Если формулировка поменяется, разбор просто
-    ничего не найдёт, и регион выпадет из списка вместо того, чтобы показать чушь."""
-    text = word_text(raw)
-    if not text:
-        return None
-    total = TOTAL_PATTERN.search(text)
-    if not total:
-        return None
-    plan = as_number(total.group(1))
-    fact = as_number(total.group(2))
-    if not plan or not fact or not 0.3 < fact / plan < 3:
-        return None
-    own = OWN_PATTERN.search(text)
-    own_fact = as_number(own.group(2)) if own else None
-    return {
-        "kind": "brief",
-        "total": round(fact, 2),
-        "plan": round(plan, 2),
-        "taxes": round(own_fact, 2) if own_fact and own_fact <= fact else None,
-    }
-
-
-def parse_pptx_report(raw: bytes) -> dict | None:
-    """Доходы Алматы из презентации «Гражданский бюджет».
-
-    Управление публикует таблицу доходов только в PPTX. Берутся три явно
-    подписанные величины, без попытки читать диаграммы или расходы.
+    Подпись выглядит как «2026 ж. қантар-шілде есеп/январь-июль отчет 2026 г.»,
+    у январского выпуска второго месяца в диапазоне нет.
     """
-    try:
-        archive = zipfile.ZipFile(io.BytesIO(raw))
-        slides = [name for name in archive.namelist() if name.startswith("ppt/slides/")]
-    except zipfile.BadZipFile:
+    for row in rows[:8]:
+        line = clean(" ".join(str(c) for c in row))
+        match = re.search(
+            r"/\s*([а-яё]+)(?:\s*-\s*([а-яё]+))?\s*отчет\s*(\d{4})", line, re.IGNORECASE
+        )
+        if not match:
+            continue
+        last = (match.group(2) or match.group(1)).lower()
+        if last not in MONTHS_RU:
+            continue
+        return int(match.group(3)), MONTHS_RU[last]
+    raise SourceError("в листе нет подписи периода")
+
+
+def sheet_title(rows: list[list[str]]) -> str:
+    """Название региона из шапки листа. Номер таблицы внутри листа не совпадает
+    с его именем, поэтому опора только на название."""
+    for row in rows[:6]:
+        value = clean(row[1]) if len(row) > 1 else ""
+        if not value or value.upper().startswith("ТАБЛИЦА") or value.startswith("("):
+            continue
+        if value.upper().startswith("ИСПОЛНЕНИЕ БЮДЖЕТА"):
+            continue
+        return value
+    return ""
+
+
+def read_income(rows: list[list[str]]) -> tuple[list[dict], float, float]:
+    """Категории доходов, итог факта и итог плана. Числа приходят в млн тенге."""
+    wanted = dict(INCOME_ROWS)
+    by_name = {name.lower(): code for code, name in INCOME_ROWS}
+    income: list[dict] = []
+    total = plan_total = None
+    for row in rows:
+        if len(row) <= COL_NAME_RU:
+            continue
+        label = clean(row[COL_NAME_RU])
+        if not label:
+            continue
+        plan = as_number(row[COL_PLAN])
+        fact = as_number(row[COL_FACT])
+        if label.upper().startswith(TOTAL_ROW):
+            total, plan_total = fact, plan
+            continue
+        # «Налоговые поступления, в том числе:» и подобные хвосты у части листов.
+        head = label.split(",")[0].strip().lower()
+        code = by_name.get(head)
+        if code is None or fact is None:
+            continue
+        if any(item["code"] == code for item in income):
+            continue
+        income.append(
+            {
+                "code": code,
+                "name": wanted[code],
+                "plan": round((plan or 0) / 1000, 3),
+                "fact": round(fact / 1000, 3),
+            }
+        )
+        if len(income) == len(INCOME_ROWS):
+            break
+    if total is None:
+        raise SourceError("в листе нет строки доходов")
+    return income, total / 1000, (plan_total or 0) / 1000
+
+
+def parse_sheet(book: XlsxBook, path: str, report: dict) -> dict | None:
+    rows = list(book.rows(path))
+    title = sheet_title(rows)
+    if not title:
         return None
-    for name in slides:
-        text = " ".join(PPTX_TEXT.findall(archive.read(name).decode("utf-8", "ignore")))
-        if (
-            "СТРУКТУРА ПОСТУПЛЕНИЙ" not in text.upper()
-            or not PRESENTATION_MILLIONS.search(text)
-        ):
-            continue
-        income = PRESENTATION_INCOME.search(text)
-        taxes = PRESENTATION_TAXES.search(text)
-        transfers = PRESENTATION_TRANSFERS.search(text)
-        if not income or not taxes or not transfers:
-            continue
-        total = as_number(GLUED.sub("", income.group(1)))
-        tax_total = as_number(GLUED.sub("", taxes.group(1)))
-        transfer_total = as_number(GLUED.sub("", transfers.group(1)))
-        if (
-            not total
-            or not tax_total
-            or transfer_total is None
-            or total < MIN_INCOME
-            or tax_total + transfer_total > total * 1.001
-        ):
-            continue
+    key = title.upper().replace("Ё", "Е")
+    if key.startswith(SUMMARY_TITLE):
+        income, total, plan = read_income(rows)
+        year, months = parse_period(rows)
         return {
-            "kind": "full",
-            "total": round(total / 1000, 2),
-            "plan": None,
-            "taxes": round(tax_total / 1000, 2),
-            "transfers": round(transfer_total / 1000, 2),
-            "pct": None,
+            "summary": True,
+            "total": total,
+            "plan": plan,
+            "year": year,
+            "months": months,
         }
-    return None
-
-
-def expenses_only(rows: list[list[str]]) -> bool:
-    """Форма про расходы: строка «Расходы» есть, налоговых поступлений нет.
-
-    Часть управлений (Абай) выкладывает только исполнение по функциональным
-    группам расходов. Доходов в таком документе нет вовсе, и это не сбой разбора.
-    """
-    body = " ".join(" ".join(row) for row in rows).lower()
-    return "расходы" in body and "налоговые поступления" not in body
-
-
-def read_income(book, seen: dict | None = None) -> list[dict] | None:
-    """Категории доходов из первого листа книги, если это отчёт об исполнении.
-
-    В `seen` отмечается, попадалась ли расходная форма: без этого нельзя отличить
-    «мы не поняли документ» от «регион публикует только расходы».
-    """
-    for _, path in book.sheets:
-        rows = book.rows(path)
-        if seen is not None and expenses_only(rows):
-            seen["expenses"] = True
-        try:
-            income = parse_income(rows, report_layout(rows))
-        except (SourceError, StopIteration, ValueError, IndexError):
-            continue
-        if income:
-            return income
-    return None
-
-
-def summarize(income: list[dict], name: str, report: dict, slug: str) -> dict:
-    total = sum(i["fact"] for i in income)
-    income = income or []
+    named = REGION_NAMES.get(key)
+    if named is None:
+        raise SourceError(f"незнакомый регион в бюллетене: {title!r}")
+    name, slug = named
+    income, total, plan = read_income(rows)
+    year, months = parse_period(rows)
     taxes = sum(i["fact"] for i in income if i["code"] == "1")
-    transfers = sum(i["fact"] for i in income if "рансферт" in i["name"])
-    plan = sum(i["plan"] for i in income)
-    # Часть управлений публикует только налоговую часть доходов: тогда это не
-    # «доходы региона», и подавать их как доходы нельзя.
-    kind = "full" if len(income) >= MIN_CATEGORIES else "taxes"
-    if kind == "taxes":
-        # Показывается налоговая часть, значит и процент должен быть по ней, а не
-        # по случайному набору разобравшихся категорий.
-        plan = sum(i["plan"] for i in income if i["code"] == "1")
-        total = taxes
+    transfers = sum(i["fact"] for i in income if i["code"] == "5")
     return {
-        "kind": kind,
+        "kind": "full",
         "name": name,
         "slug": slug,
-        "period": f"{report['year']}-{report['months']:02d}",
-        "year": report["year"],
-        "months": report["months"],
-        "published": report["published"],
-        "url": f"{DOC_PAGE}/{slug}/documents/details/{report['id']}?lang=ru",
+        "period": f"{year}-{months:02d}",
+        "year": year,
+        "months": months,
+        "published": str(report.get("created_date") or "")[:10],
+        "url": f"{DOC_PAGE}/{report['id']}?lang=ru",
         "income": income,
         "total": round(total, 2),
         "plan": round(plan, 2),
         "taxes": round(taxes, 2),
         "transfers": round(transfers, 2),
-        "own_share": (
-            round((total - transfers) / total * 100, 1)
-            if total and kind == "full"
-            else None
-        ),
         "pct": round(total / plan * 100, 1) if plan else None,
     }
 
 
-def too_old(year: int, months: int) -> bool:
-    today = datetime.now(timezone.utc)
-    age = (today.year - year) * 12 + today.month - months
-    return age > MAX_AGE_MONTHS
-
-
-def read_report(
-    slug: str, report: dict, name: str, seen: dict | None = None
-) -> dict | None:
-    """Разбор одного документа: None, если форма не та."""
-    raw = download(slug, report)
-    best: dict | None = None
-    for book in books(raw):
-        income = read_income(book, seen)
-        if not income:
-            continue
-        summary = summarize(income, name, report, slug)
-        if summary["total"] < MIN_INCOME or not summary["taxes"]:
-            continue
-        if summary["taxes"] > summary["total"] * 1.001:
-            continue
-        # В архиве лежит и бюджет области целиком, и отдельно областной без районов.
-        # Нужен первый: он больше.
-        if best is None or summary["total"] > best["total"]:
-            best = summary
-    return best
-
-
-def fetch_region(slug: str, name: str) -> dict:
-    candidates = region_reports(slug)
-    fresh = [c for c in candidates if not too_old(c["year"], c["months"])]
-    if not fresh:
-        newest = candidates[0]
-        raise SourceError(
-            f"свежих отчётов нет, последний за {newest['year']}-{newest['months']:02d}"
-        )
-    seen = {"expenses": False}
-    for report in fresh:
-        try:
-            summary = read_report(slug, report, name, seen)
-        except (SourceError, OSError):
-            continue
-        if summary:
-            return summary
-    for report in fresh:
-        try:
-            brief = parse_word_report(download(slug, report))
-        except (SourceError, OSError):
-            continue
-        if brief:
-            return {**summarize([], name, report, slug), **brief, "income": []}
-    for report in fresh:
-        if slug != "almaty-finance-econom":
-            continue
-        try:
-            presentation = parse_pptx_report(download(slug, report))
-        except (SourceError, OSError):
-            continue
-        if presentation:
-            return {**summarize([], name, report, slug), **presentation, "income": []}
-    if seen["expenses"]:
-        raise SourceError("в отчётах только расходы, доходной части нет")
-    raise SourceError("ни один из документов не удалось разобрать")
-
-
 def build() -> dict:
-    regions: list[dict] = []
     issues: list[str] = []
-    for slug, name in REGIONS:
+    last: Exception | None = None
+    for report in bulletins()[:4]:
         try:
-            regions.append(fetch_region(slug, name))
-        except (SourceError, OSError) as exc:
-            issues.append(f"{name}: {exc}")
-    regions.sort(key=lambda r: -r["total"])
-    return {
-        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "source": "Управления финансов областей, gov.kz",
-        "regions": regions,
-        "issues": issues,
-    }
+            book = fetch_bulletin(report)
+            regions: list[dict] = []
+            summary: dict | None = None
+            for name, path in book.sheets:
+                if not SHEET_RE.match(name):
+                    continue
+                parsed = parse_sheet(book, path, report)
+                if parsed is None:
+                    continue
+                if parsed.get("summary"):
+                    summary = parsed
+                else:
+                    regions.append(parsed)
+            if len(regions) < len(REGION_NAMES):
+                missing = set(n for n, _ in REGION_NAMES.values()) - {
+                    r["name"] for r in regions
+                }
+                raise SourceError(f"в выпуске нет листов: {', '.join(sorted(missing))}")
+            if summary:
+                collected = sum(r["total"] for r in regions)
+                if (
+                    abs(collected - summary["total"]) / summary["total"]
+                    > SUMMARY_TOLERANCE
+                ):
+                    raise SourceError(
+                        f"сумма регионов {collected:.0f} не сходится со сводом "
+                        f"{summary['total']:.0f} млрд"
+                    )
+            regions.sort(key=lambda r: -r["total"])
+            return {
+                "generated_at": _now(),
+                "source": "Министерство финансов РК, статистический бюллетень",
+                "source_url": f"{DOC_PAGE}/{report['id']}?lang=ru",
+                "period": regions[0]["period"],
+                "year": regions[0]["year"],
+                "months": regions[0]["months"],
+                "regions": regions,
+                "issues": issues,
+            }
+        except (SourceError, OSError, KeyError, ValueError) as exc:
+            last = exc
+            issues.append(f"выпуск {report.get('id')}: {exc}")
+            continue
+    raise SourceError(f"ни один выпуск бюллетеня не разобрался: {last}")
 
 
 def main() -> None:
     dataset = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_DATASET
     data = build()
-    previous = {}
-    if dataset.exists():
-        try:
-            previous = json.loads(dataset.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            previous = {}
-    # Регион, который сегодня не ответил, остаётся с прошлым срезом и пометкой.
-    have = {r["slug"] for r in data["regions"]}
-    for old in previous.get("regions", []):
-        if old["slug"] in have or too_old(old["year"], old["months"]):
-            continue
-        data["regions"].append({**old, "stale": True})
-    data["regions"].sort(key=lambda r: -r["total"])
-
     dataset.parent.mkdir(parents=True, exist_ok=True)
     dataset.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"регионов собрано: {len(data['regions'])} из {len(REGIONS)}")
+    print(
+        f"регионов собрано: {len(data['regions'])} из {len(REGION_NAMES)}, период {data['period']}"
+    )
     for region in data["regions"]:
         print(
-            f"   {region['name'][:26]:28} {region['period']}  доходы {region['total']:8.1f} "
-            f"млрд, налоги {region['taxes']:7.1f}, трансферты {region['transfers']:7.1f}"
+            f"   {region['name'][:26]:28} доходы {region['total']:8.1f} млрд, "
+            f"налоги {region['taxes']:7.1f}, трансферты {region['transfers']:7.1f}, "
+            f"план {region['pct']}%"
         )
     for issue in data["issues"]:
         print(f"  проблема: {issue}")
     print(f"Записано: {dataset}")
-    # Отдельная область без отчёта это норма источника, а вот пустой раздел
-    # означает, что не работает сам обход, и такую сборку публиковать нельзя.
-    if not data["regions"]:
-        raise SystemExit("не собран ни один регион: раздел областей потерян целиком")
 
 
 if __name__ == "__main__":
