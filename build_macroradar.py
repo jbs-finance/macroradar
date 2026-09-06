@@ -149,8 +149,8 @@ TEMPLATE = """<!doctype html>
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'none'; img-src 'self' https://jbs.finance; font-src 'self'; base-uri 'none'; form-action 'none'">
 {meta}<title>Macro Radar Казахстана</title><style>{style}</style></head><body>
 {header}<div class="wrap"><main>
-<header id="overview" class="radar-hero"><p class="eyebrow">JB Solutions</p><h1>Macro Radar Казахстана</h1><p class="lede">Пять срезов экономики на одной странице: от макроусловий и торговли до Нацфонда, бюджета и налогов.</p></header>
-<p class="reading-note">Выбери анализ плиткой или вкладкой выше. У каждого показателя указаны дата и первоисточник. Это ориентир для анализа, не персональная инвестиционная или налоговая рекомендация.</p>
+<header id="overview" class="radar-hero"><p class="eyebrow">JB Solutions</p><h1>Macro Radar Казахстана</h1><p class="lede">Пять срезов экономики Казахстана: макроусловия, внешняя торговля, Нацфонд, бюджет и налоговые ставки. У каждого своя страница с датой сверки и первоисточником.</p></header>
+<p class="reading-note">Выбери срез карточкой ниже или ссылкой в шапке. У каждого показателя указаны дата и первоисточник. Это ориентир для анализа, персональной инвестиционной или налоговой рекомендацией он не является.</p>
 <section class="radar-grid" aria-label="Анализы Macro Radar">
 {cards}
 </section>
