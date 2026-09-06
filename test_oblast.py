@@ -525,3 +525,48 @@ def test_region_listing_survives_single_network_hiccup(monkeypatch):
     found = oblast.region_reports("aqmola-karzhy")
     assert calls["n"] == 2
     assert found[0]["id"] == 7
+
+
+def test_expenses_only_form_is_named_as_such():
+    """Абай публикует только расходы по функциональным группам: доходов в файле
+    нет вовсе, и в списке пропусков это не должно выглядеть сбоем разбора."""
+    import oblast
+
+    expenses = [
+        ["Отчет о кассовом исполнении"],
+        ["Единица измерения", "тыс. теңге"],
+        ["Коды бюджетной классификации", "Наименование", "Утвержденный бюджет"],
+        ["Расходы", "", "341139844"],
+        ["01", "Государственные услуги общего характера", "6051783"],
+    ]
+    income = [
+        ["Код", "Наименование", "Сводный план", "Исполнение"],
+        ["1", "Налоговые поступления", "200", "100"],
+        ["Расходы", "", "", ""],
+    ]
+    assert oblast.expenses_only(expenses)
+    assert not oblast.expenses_only(income)
+
+
+def test_region_without_income_reports_precise_reason(monkeypatch):
+    import oblast
+
+    report = {"id": 1, "year": 2026, "months": 7, "published": "2026-08-01"}
+    monkeypatch.setattr(oblast, "region_reports", lambda slug: [report])
+    monkeypatch.setattr(oblast, "too_old", lambda year, months: False)
+
+    class Book:
+        sheets = [("Sheet1", "sheet1")]
+
+        def rows(self, path):
+            return [["Расходы", "1"], ["01", "Оборона", "2"]]
+
+    monkeypatch.setattr(oblast, "download", lambda slug, r: b"PK\x03\x04")
+    monkeypatch.setattr(oblast, "books", lambda raw: iter([Book()]))
+    monkeypatch.setattr(oblast, "parse_word_report", lambda raw: None)
+    try:
+        oblast.fetch_region("abay-finance", "Абай")
+    except oblast.SourceError as exc:
+        assert "только расходы" in str(exc)
+    else:
+        raise AssertionError("ожидалась SourceError")

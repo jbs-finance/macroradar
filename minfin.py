@@ -208,6 +208,9 @@ def fetch_report(report: dict) -> Workbook:
     return Workbook(download(SITE + link, path, min_size=10_000, expect="xlsx"))
 
 
+HEADER_SCAN_ROWS = 40
+
+
 def report_layout(rows: list[list[str]]) -> tuple[int, int, int, int]:
     """Колонки отчёта об исполнении: план, факт, процент и левый край наименований.
 
@@ -217,7 +220,11 @@ def report_layout(rows: list[list[str]]) -> tuple[int, int, int, int]:
     процентом исполнения из самого отчёта."""
     header = None
     plan_mark = None
-    for index, row in enumerate(rows[:14]):
+    # Окно поиска шире четырнадцати строк: ВКО выкладывает форму с преамбулой
+    # «Приложение 10 к Правилам составления», из-за которой шапка уезжает на
+    # семнадцатую строку и отчёт не разбирался вовсе. Берётся первое совпадение,
+    # поэтому формам с шапкой наверху расширение окна ничего не меняет.
+    for index, row in enumerate(rows[:HEADER_SCAN_ROWS]):
         # Шапка бывает разбита на две строки: в одной наименование, в соседней
         # подписи плановых колонок. Читаются они только вместе.
         following = rows[index + 1] if index + 1 < len(rows) else []
@@ -318,6 +325,34 @@ def category_code(name: str) -> str | None:
     return None
 
 
+# Числа на выходе всегда в миллиардах тенге, а форма объявляет свою единицу
+# строкой «Единица измерения». Минфин и большинство областей пишут в тысячах,
+# но ВКО выкладывает форму в тенге: без пересчёта её доходы уехали бы на страницу
+# больше настоящих в тысячу раз.
+UNIT_DIVISORS = (
+    ("млрд", 1.0),
+    ("млн", 1e3),
+    ("тыс", 1e6),
+)
+DEFAULT_DIVISOR = 1e6
+
+
+def unit_divisor(rows: list[list[str]]) -> float:
+    """Во сколько раз делить числа формы, чтобы получить миллиарды тенге."""
+    for row in rows[:HEADER_SCAN_ROWS]:
+        line = " ".join(row).lower()
+        if "диница измерения" not in line:
+            continue
+        head = line.split("диница измерения", 1)[1]
+        for mark, divisor in UNIT_DIVISORS:
+            if mark in head:
+                return divisor
+        if "тенге" in head or "теңге" in head:
+            return 1e9
+        break
+    return DEFAULT_DIVISOR
+
+
 def parse_income(
     rows: list[list[str]], layout: tuple[int, int, int, int] | None = None
 ) -> list[dict]:
@@ -327,6 +362,7 @@ def parse_income(
     заметная часть доходов это трансферты из республиканского, и без них картина
     поступлений читается неверно."""
     col_plan, col_fact, col_pct, name_col = layout or report_layout(rows)
+    divisor = unit_divisor(rows)
     out: list[dict] = []
     seen: set[str] = set()
     for row in rows:
@@ -353,8 +389,8 @@ def parse_income(
             {
                 "code": code,
                 "name": " ".join(title.split()).capitalize(),
-                "plan": (as_number(row[col_plan]) or 0) / 1e6,
-                "fact": fact / 1e6,
+                "plan": (as_number(row[col_plan]) or 0) / divisor,
+                "fact": fact / divisor,
                 "pct": as_number(row[col_pct]) if 0 <= col_pct < len(row) else None,
             }
         )

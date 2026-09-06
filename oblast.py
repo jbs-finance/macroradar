@@ -332,11 +332,27 @@ def parse_pptx_report(raw: bytes) -> dict | None:
     return None
 
 
-def read_income(book) -> list[dict] | None:
-    """Категории доходов из первого листа книги, если это отчёт об исполнении."""
+def expenses_only(rows: list[list[str]]) -> bool:
+    """Форма про расходы: строка «Расходы» есть, налоговых поступлений нет.
+
+    Часть управлений (Абай) выкладывает только исполнение по функциональным
+    группам расходов. Доходов в таком документе нет вовсе, и это не сбой разбора.
+    """
+    body = " ".join(" ".join(row) for row in rows).lower()
+    return "расходы" in body and "налоговые поступления" not in body
+
+
+def read_income(book, seen: dict | None = None) -> list[dict] | None:
+    """Категории доходов из первого листа книги, если это отчёт об исполнении.
+
+    В `seen` отмечается, попадалась ли расходная форма: без этого нельзя отличить
+    «мы не поняли документ» от «регион публикует только расходы».
+    """
     for _, path in book.sheets:
+        rows = book.rows(path)
+        if seen is not None and expenses_only(rows):
+            seen["expenses"] = True
         try:
-            rows = book.rows(path)
             income = parse_income(rows, report_layout(rows))
         except (SourceError, StopIteration, ValueError, IndexError):
             continue
@@ -388,12 +404,14 @@ def too_old(year: int, months: int) -> bool:
     return age > MAX_AGE_MONTHS
 
 
-def read_report(slug: str, report: dict, name: str) -> dict | None:
+def read_report(
+    slug: str, report: dict, name: str, seen: dict | None = None
+) -> dict | None:
     """Разбор одного документа: None, если форма не та."""
     raw = download(slug, report)
     best: dict | None = None
     for book in books(raw):
-        income = read_income(book)
+        income = read_income(book, seen)
         if not income:
             continue
         summary = summarize(income, name, report, slug)
@@ -416,9 +434,10 @@ def fetch_region(slug: str, name: str) -> dict:
         raise SourceError(
             f"свежих отчётов нет, последний за {newest['year']}-{newest['months']:02d}"
         )
+    seen = {"expenses": False}
     for report in fresh:
         try:
-            summary = read_report(slug, report, name)
+            summary = read_report(slug, report, name, seen)
         except (SourceError, OSError):
             continue
         if summary:
@@ -439,6 +458,8 @@ def fetch_region(slug: str, name: str) -> dict:
             continue
         if presentation:
             return {**summarize([], name, report, slug), **presentation, "income": []}
+    if seen["expenses"]:
+        raise SourceError("в отчётах только расходы, доходной части нет")
     raise SourceError("ни один из документов не удалось разобрать")
 
 

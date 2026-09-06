@@ -592,3 +592,43 @@ def test_fetch_report_drops_poisoned_cache(monkeypatch, tmp_path):
         }
     )
     assert raw.startswith(b"PK")
+
+
+def test_unit_divisor_follows_declared_units():
+    """Форма объявляет свою единицу, и от неё зависит масштаб чисел на странице."""
+    import minfin
+
+    def rows(unit):
+        return [["Единица измерения", unit], ["Наименование", "Сводный план"]]
+
+    assert minfin.unit_divisor(rows("тыс. теңге")) == 1e6
+    assert minfin.unit_divisor(rows("тыс.тенге")) == 1e6
+    assert minfin.unit_divisor(rows("Тенге")) == 1e9
+    assert minfin.unit_divisor(rows("млн тенге")) == 1e3
+    assert minfin.unit_divisor(rows("млрд тенге")) == 1.0
+    assert minfin.unit_divisor([["Наименование"]]) == minfin.DEFAULT_DIVISOR
+
+
+def test_report_layout_finds_header_below_first_rows():
+    """ВКО выкладывает форму с преамбулой, шапка уезжает на семнадцатую строку."""
+    import minfin
+
+    preamble = [["Приложение 10 к Правилам составления"]] + [[""]] * 15
+    rows = preamble + [
+        ["Код", "Наименование", "Сводный план", "Исполнение"],
+        ["1", "Налоговые поступления", "200", "100"],
+        ["2", "Неналоговые поступления", "200", "100"],
+        ["3", "Поступления от продажи", "200", "100"],
+    ]
+    col_plan, col_fact, _, name_col = minfin.report_layout(rows)
+    assert (col_plan, col_fact, name_col) == (2, 3, 1)
+
+
+def test_report_layout_ignores_header_past_the_window():
+    """Окно поиска не бесконечное: шапка глубже сороковой строки это не форма."""
+    import minfin
+    import pytest
+
+    rows = [[""]] * 45 + [["Код", "Наименование", "Сводный план", "Исполнение"]]
+    with pytest.raises(minfin.SourceError):
+        minfin.report_layout(rows)
