@@ -106,11 +106,11 @@ def meta_tags(
 def cta_block() -> str:
     """Радар это витрина: такой же собирается под отрасль или компанию клиента."""
     return f"""    <section class="cta" aria-labelledby="cta-title">
-      <h2 id="cta-title">Такой же радар по вашей отрасли или компании</h2>
-      <p>Этот радар собирается автоматически из открытых источников. Тот же движок
-        работает на данных клиента: продажи против рынка, цены поставщиков против
-        инфляции, план против факта, с ежедневным обновлением и без ручной сводки.</p>
-      <a class="cta-link" href="{SITE}/ru/contacts">Обсудить радар для вашего бизнеса</a>
+      <h2 id="cta-title">Радар под ваш рынок или компанию</h2>
+      <p>Код этого радара открыт, поднять такой же можно самостоятельно по
+        инструкции в репозитории. Настройку под источники клиента и радар под
+        другую отрасль или рынок делает JB Solutions.</p>
+      <a class="cta-link" href="{SITE}/ai/macroradar/">Все способы получить радар</a>
     </section>"""
 
 
@@ -250,7 +250,9 @@ def freshness_badge(
     if stale:
         return STALE_BADGE
     if is_outdated(last, freq, today):
-        return f'<span class="badge badge-stale">устарело: {html.escape(str(last))}</span>'
+        return (
+            f'<span class="badge badge-stale">устарело: {html.escape(str(last))}</span>'
+        )
     return FRESH_BADGE
 
 
