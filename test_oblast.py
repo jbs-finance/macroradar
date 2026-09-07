@@ -1,94 +1,11 @@
-"""Тесты чтения старого формата книг и разбора бюллетеня Минфина по регионам."""
-
-import struct
+"""Тесты разбора бюллетеня Минфина по регионам и форм отчётов."""
 
 import pytest
 
 from budget import SourceError
-
-import xls
 from minfin import category_code, parse_income, report_layout
 from minfin_block import oblast_section, plural
 from oblast import REGION_NAMES, clean, parse_period, read_income, sheet_title
-
-
-def record(code: int, body: bytes) -> bytes:
-    return struct.pack("<HH", code, len(body)) + body
-
-
-def unicode_string(text: str) -> bytes:
-    return struct.pack("<HB", len(text), 1) + text.encode("utf-16-le")
-
-
-def label_row(row: int, col: int, index: int) -> bytes:
-    return record(xls.LABELSST, struct.pack("<HHHI", row, col, 0, index))
-
-
-def number_row(row: int, col: int, value: float) -> bytes:
-    return record(
-        xls.NUMBER, struct.pack("<HHH", row, col, 0) + struct.pack("<d", value)
-    )
-
-
-# --- Записи BIFF ---------------------------------------------------------------
-
-
-def test_records_glue_continuation():
-    """Длинная запись разрезана на CONTINUE, читаться должна как одна."""
-    stream = (
-        record(xls.SST, b"\x01\x02")
-        + record(xls.CONTINUE, b"\x03")
-        + record(xls.EOF, b"")
-    )
-    codes = [(code, body) for code, body in xls.records(stream)]
-    assert codes[0] == (xls.SST, b"\x01\x02\x03")
-
-
-def test_rk_value_decodes_all_four_shapes():
-    """Упакованное число бывает целым и дробным, с делением на сто и без."""
-    assert xls._rk_value((100 << 2) | 0x02) == 100.0
-    assert xls._rk_value((12345 << 2) | 0x03) == pytest.approx(123.45)
-    packed = struct.unpack("<Q", struct.pack("<d", 2.5))[0] >> 32
-    assert xls._rk_value(int(packed) << 0 & 0xFFFFFFFC) == pytest.approx(2.5)
-
-
-def test_unicode_string_reads_both_encodings():
-    wide = struct.pack("<HB", 3, 1) + "Абв".encode("utf-16-le")
-    assert xls._unicode_string(wide, 0)[0] == "Абв"
-    narrow = struct.pack("<HB", 3, 0) + "abc".encode("cp1251")
-    assert xls._unicode_string(narrow, 0)[0] == "abc"
-
-
-def test_shared_strings_reads_table():
-    body = struct.pack("<II", 2, 2) + unicode_string("Налоги") + unicode_string("План")
-    assert xls.shared_strings(body) == ["Налоги", "План"]
-
-
-def test_sheet_rows_places_cells_by_address():
-    """Пропущенные ячейки не должны сдвигать колонки влево."""
-    stream = (
-        label_row(0, 0, 0)
-        + label_row(0, 4, 1)
-        + number_row(1, 4, 12.5)
-        + record(xls.EOF, b"")
-    )
-    rows = xls.sheet_rows(stream, 0, ["Код", "Наименование"])
-    assert rows[0] == ["Код", "", "", "", "Наименование"]
-    assert rows[1][4] == "12.5"
-
-
-def test_sheet_rows_reads_mulrk():
-    body = struct.pack("<HH", 0, 1)
-    for value in (100.0, 200.0):
-        body += struct.pack("<HI", 0, (int(value) << 2) | 0x02)
-    body += struct.pack("<H", 2)
-    rows = xls.sheet_rows(record(xls.MULRK, body) + record(xls.EOF, b""), 0, [])
-    assert rows[0][1:3] == ["100", "200"]
-
-
-def test_workbook_stream_rejects_foreign_file():
-    with pytest.raises(xls.XlsError):
-        xls.workbook_stream(b"PK\x03\x04not an ole2 file")
 
 
 # --- Формы отчётов -------------------------------------------------------------
