@@ -1,92 +1,11 @@
-"""Тесты чтения .xls и сбора областных отчётов."""
-
-import struct
+"""Тесты разбора бюллетеня Минфина по регионам и форм отчётов."""
 
 import pytest
 
-import xls
+from budget import SourceError
 from minfin import category_code, parse_income, report_layout
 from minfin_block import oblast_section, plural
-from oblast import REGIONS, parse_period, summarize, too_old
-
-
-def record(code: int, body: bytes) -> bytes:
-    return struct.pack("<HH", code, len(body)) + body
-
-
-def unicode_string(text: str) -> bytes:
-    return struct.pack("<HB", len(text), 1) + text.encode("utf-16-le")
-
-
-def label_row(row: int, col: int, index: int) -> bytes:
-    return record(xls.LABELSST, struct.pack("<HHHI", row, col, 0, index))
-
-
-def number_row(row: int, col: int, value: float) -> bytes:
-    return record(
-        xls.NUMBER, struct.pack("<HHH", row, col, 0) + struct.pack("<d", value)
-    )
-
-
-# --- Записи BIFF ---------------------------------------------------------------
-
-
-def test_records_glue_continuation():
-    """Длинная запись разрезана на CONTINUE, читаться должна как одна."""
-    stream = (
-        record(xls.SST, b"\x01\x02")
-        + record(xls.CONTINUE, b"\x03")
-        + record(xls.EOF, b"")
-    )
-    codes = [(code, body) for code, body in xls.records(stream)]
-    assert codes[0] == (xls.SST, b"\x01\x02\x03")
-
-
-def test_rk_value_decodes_all_four_shapes():
-    """Упакованное число бывает целым и дробным, с делением на сто и без."""
-    assert xls._rk_value((100 << 2) | 0x02) == 100.0
-    assert xls._rk_value((12345 << 2) | 0x03) == pytest.approx(123.45)
-    packed = struct.unpack("<Q", struct.pack("<d", 2.5))[0] >> 32
-    assert xls._rk_value(int(packed) << 0 & 0xFFFFFFFC) == pytest.approx(2.5)
-
-
-def test_unicode_string_reads_both_encodings():
-    wide = struct.pack("<HB", 3, 1) + "Абв".encode("utf-16-le")
-    assert xls._unicode_string(wide, 0)[0] == "Абв"
-    narrow = struct.pack("<HB", 3, 0) + "abc".encode("cp1251")
-    assert xls._unicode_string(narrow, 0)[0] == "abc"
-
-
-def test_shared_strings_reads_table():
-    body = struct.pack("<II", 2, 2) + unicode_string("Налоги") + unicode_string("План")
-    assert xls.shared_strings(body) == ["Налоги", "План"]
-
-
-def test_sheet_rows_places_cells_by_address():
-    """Пропущенные ячейки не должны сдвигать колонки влево."""
-    stream = (
-        label_row(0, 0, 0)
-        + label_row(0, 4, 1)
-        + number_row(1, 4, 12.5)
-        + record(xls.EOF, b"")
-    )
-    rows = xls.sheet_rows(stream, 0, ["Код", "Наименование"])
-    assert rows[0] == ["Код", "", "", "", "Наименование"]
-    assert rows[1][4] == "12.5"
-
-
-def test_sheet_rows_reads_mulrk():
-    body = struct.pack("<HH", 0, 1)
-    for value in (100.0, 200.0):
-        body += struct.pack("<HI", 0, (int(value) << 2) | 0x02)
-    body += struct.pack("<H", 2)
-    rows = xls.sheet_rows(record(xls.MULRK, body) + record(xls.EOF, b""), 0, [])
-    assert rows[0][1:3] == ["100", "200"]
-
-
-def test_workbook_stream_rejects_foreign_file():
-    with pytest.raises(xls.XlsError):
-        xls.workbook_stream(b"PK\x03\x04not an ole2 file")
+from oblast import REGION_NAMES, clean, parse_period, read_income, sheet_title
 
 
 # --- Формы отчётов -------------------------------------------------------------
@@ -145,66 +64,94 @@ def test_category_code_ignores_unrelated_rows():
     assert category_code("Неналоговые поступления") == "2"
 
 
-# --- Сбор по регионам ----------------------------------------------------------
+# --- Разбор бюллетеня Минфина --------------------------------------------------
 
 
-def test_regions_cover_all_administrative_units():
-    """Три города республиканского значения не должны выпадать из обхода."""
-    assert len(REGIONS) == 20
-    cities = {name for _, name in REGIONS}
-    assert {"Астана", "Алматы", "Шымкент"} <= cities
-    assert ("almaty-finance-econom", "Алматы") in REGIONS
+def bulletin_rows() -> list[list[str]]:
+    """Лист региона так, как его отдаёт бюллетень: казахский слева, русский в
+    седьмой колонке, план и факт в пятой и шестой."""
+    return [
+        ["12-кесте", "Таблица 12", "", "", "", "", ""],
+        ["АБАЙ ОБЛЫСЫ", "ИСПОЛНЕНИЕ БЮДЖЕТА", "", "", "", "", ""],
+        ["БЮДЖЕТІНІҢ АТҚАРЫЛУЫ", "ОБЛАСТЬ АБАЙ", "", "", "", "", ""],
+        ["(млн.теңге)", "(млн. теңге)", "", "", "", "", ""],
+        ["Атауы", "2023", "2024", "2025",
+         "2026 ж. қантар-шілде есеп/январь-июль отчет 2026 г.", "", "Наименование"],
+        ["жылдық/ годовой", "", "", "", "қантар-шілде/январь-июль", "", ""],
+        ["1", "2", "3", "4", "5", "6", "7"],
+        ["I. КІРІСТЕР", "", "", "", "260000", "252000", "I. ДОХОДЫ"],
+        ["Салықтық түсімдер", "", "", "", "80000", "78000",
+         "Налоговые поступления,_x000D_\r\n в том числе:"],
+        ["Салықтық емес түсімдер", "", "", "", "4000", "4032",
+         "Неналоговые поступления"],
+        ["Негізгі капиталды сату", "", "", "", "8000", "8612",
+         "Поступления от продажи основного капитала"],
+        ["Арнаулы түсімдер", "", "", "", "0", "0", "Специальные поступления"],
+        ["Трансферттердің түсімдері", "", "", "", "168000", "161356",
+         "Поступления трансфертов"],
+        ["II. ШЫҒЫНДАР", "", "", "", "250000", "240538", "II. ЗАТРАТЫ"],
+    ]
 
 
-def test_parse_period_reads_both_date_styles():
-    assert parse_period(
-        "Отчет об исполнении бюджета области на 1 августа 2026 года"
-    ) == (2026, 7)
-    assert parse_period("отчет об исполнении бюджета на 01.08.2026г.") == (2026, 7)
+def test_region_names_cover_all_administrative_units():
+    """Три города республиканского значения не должны выпасть из разбора."""
+    assert len(REGION_NAMES) == 20
+    names = {name for name, _ in REGION_NAMES.values()}
+    assert {"Астана", "Алматы", "Шымкент"} <= names
+    assert REGION_NAMES["ОБЛАСТЬ АБАЙ"] == ("Абай", "abai")
 
 
-def test_parse_period_skips_other_documents():
-    assert parse_period("Гражданский бюджет на 01.08.2026 год") is None
-    assert parse_period("Отчет о кассовом исполнении на 1 августа 2026 года") is None
-    assert parse_period("Протокол собрания") is None
+def test_sheet_title_takes_region_not_table_number():
+    """Номер таблицы внутри листа не совпадает с его именем, опора на название."""
+    assert sheet_title(bulletin_rows()) == "ОБЛАСТЬ АБАЙ"
 
 
-def test_parse_period_january_covers_previous_year():
-    assert parse_period("Отчет об исполнении бюджета на 1 января 2026 года") == (
-        2025,
-        12,
+def test_parse_period_reads_month_range_from_header():
+    assert parse_period(bulletin_rows()) == (2026, 7)
+
+
+def test_parse_period_reads_single_month():
+    rows = [["", "", "", "", "2026 ж. қаңтар есеп/январь отчет 2026 г.", "", ""]]
+    assert parse_period(rows) == (2026, 1)
+
+
+def test_parse_period_without_header_raises():
+    with pytest.raises(SourceError):
+        parse_period([["Атауы", "", "", "", "", "", "Наименование"]])
+
+
+def test_clean_strips_source_garbage():
+    assert clean("Налоговые поступления,_x000D_\r\n в том числе:") == (
+        "Налоговые поступления, в том числе:"
     )
 
 
-def test_presentation_period_allows_almaty_civic_budget():
-    from oblast import presentation_period
+def test_read_income_converts_millions_to_billions():
+    income, total, plan = read_income(bulletin_rows())
+    assert total == pytest.approx(252.0)
+    assert plan == pytest.approx(260.0)
+    assert [i["code"] for i in income] == ["1", "2", "3", "4", "5"]
+    taxes = next(i for i in income if i["code"] == "1")
+    assert taxes["fact"] == pytest.approx(78.0)
+    assert taxes["name"] == "Налоговые поступления"
+    assert next(i for i in income if i["code"] == "5")["fact"] == pytest.approx(161.356)
 
-    assert presentation_period("Гражданский бюджет на 1 августа 2026 года") == (2026, 7)
+
+def test_read_income_without_total_raises():
+    rows = [r for r in bulletin_rows() if "I. ДОХОДЫ" not in r[6]]
+    with pytest.raises(SourceError):
+        read_income(rows)
 
 
-def test_too_old_cuts_stale_reports():
-    assert too_old(2022, 7) is True
-    assert too_old(2026, 7) is False
+# --- Блок на странице ----------------------------------------------------------
 
 
 def sample_income() -> list[dict]:
     return [
-        {"code": "1", "name": "Налоговые поступления", "plan": 100.0, "fact": 96.0},
-        {"code": "2", "name": "Неналоговые поступления", "plan": 10.0, "fact": 12.0},
-        {"code": "5", "name": "Поступления трансфертов", "plan": 90.0, "fact": 82.0},
+        {"code": "1", "name": "Налоговые поступления", "plan": 700.0, "fact": 680.4},
+        {"code": "2", "name": "Неналоговые поступления", "plan": 50.0, "fact": 48.3},
+        {"code": "5", "name": "Поступления трансфертов", "plan": 140.0, "fact": 136.4},
     ]
-
-
-def test_summarize_counts_own_share():
-    report = {"year": 2026, "months": 7, "published": "2026-08-11", "id": 1}
-    summary = summarize(sample_income(), "Тестовая", report, "test-karzhy")
-    assert summary["total"] == pytest.approx(190.0)
-    assert summary["transfers"] == pytest.approx(82.0)
-    assert summary["own_share"] == pytest.approx(56.8, abs=0.1)
-    assert summary["period"] == "2026-07"
-
-
-# --- Блок на странице ----------------------------------------------------------
 
 
 def sample_oblast() -> dict:
@@ -230,14 +177,15 @@ def sample_oblast() -> dict:
 
 def test_oblast_section_lists_regions_with_periods():
     html = oblast_section(sample_oblast())
-    assert "Астана" in html and "январь-июль 2026" in html
-    assert "865 млрд" in html
+    assert "Астана" in html and "865 млрд" in html
+    assert "план 96%" in html
 
 
-def test_oblast_section_says_how_many_reported():
-    """Неполный список нельзя подавать как картину по стране."""
+def test_oblast_section_names_the_single_period():
+    """Период называется один раз в шапке, а не двадцать раз в строках."""
     html = oblast_section(sample_oblast())
-    assert "1 региона из двадцати" in html
+    assert "Все двадцать регионов за один период, январь-июль 2026" in html
+    assert html.count("январь-июль 2026") == 1
 
 
 def test_oblast_section_empty_without_data():
@@ -319,86 +267,6 @@ def presentation_document(text: str) -> bytes:
     return buffer.getvalue()
 
 
-def test_word_text_repairs_split_numbers():
-    """Форматирование рвёт числа: «7 25 , 6» это 725,6, а «202 6» это 2026."""
-    from oblast import word_text
-
-    assert "725,6" in word_text(word_document("объем 7 25 , 6 млрд"))
-    assert "2026" in word_text(word_document("на 1 сентября 202 6 года"))
-
-
-def test_parse_word_report_reads_totals():
-    from oblast import parse_word_report
-
-    text = (
-        "СПРАВКА по исполнению бюджета области При плане на отчетный период "
-        "по поступлениям 522,3 млрд тенге, исполнение составило 540,9 млрд тенге "
-        "или 103,6 % к плану. Собственные доходы при плане на отчетный период "
-        "165,8 млрд тенге исполнены на 1 84 ,2 млрд тенге или 111,1 %."
-    )
-    parsed = parse_word_report(word_document(text))
-    assert parsed["kind"] == "brief"
-    assert parsed["total"] == pytest.approx(540.9)
-    assert parsed["plan"] == pytest.approx(522.3)
-    assert parsed["taxes"] == pytest.approx(184.2)
-
-
-def test_parse_word_report_ignores_other_text():
-    from oblast import parse_word_report
-
-    assert parse_word_report(word_document("Протокол собрания без цифр")) is None
-
-
-def test_parse_pptx_report_reads_almaty_income_structure():
-    from oblast import parse_pptx_report
-
-    text = (
-        "СТРУКТУРА ПОСТУПЛЕНИЙ|1 232 429,6 ДОХОДЫ|"
-        "МЛН. ТЕНГЕ|Налоговые поступления 1 140 889,8|Трансферты 19 372,2"
-    )
-    parsed = parse_pptx_report(presentation_document(text))
-    assert parsed == {
-        "kind": "full",
-        "total": pytest.approx(1232.43),
-        "plan": None,
-        "taxes": pytest.approx(1140.89),
-        "transfers": pytest.approx(19.37),
-        "pct": None,
-    }
-
-
-def test_parse_pptx_report_requires_millions_unit():
-    from oblast import parse_pptx_report
-
-    text = (
-        "СТРУКТУРА ПОСТУПЛЕНИЙ|1 232 429,6 ДОХОДЫ|"
-        "Налоговые поступления 1 140 889,8|Трансферты 19 372,2"
-    )
-    assert parse_pptx_report(presentation_document(text)) is None
-
-
-def test_parse_word_report_rejects_implausible_ratio():
-    """Если исполнение отличается от плана в разы, это не тот показатель."""
-    from oblast import parse_word_report
-
-    text = (
-        "При плане на отчетный период по поступлениям 10 млрд тенге, "
-        "исполнение составило 900 млрд тенге"
-    )
-    assert parse_word_report(word_document(text)) is None
-
-
-def test_summarize_marks_partial_form():
-    """Если в отчёте только налоги, это не доходы региона."""
-    report = {"year": 2026, "months": 7, "published": "2026-08-11", "id": 1}
-    only_taxes = [
-        {"code": "1", "name": "Налоговые поступления", "plan": 60.0, "fact": 61.0}
-    ]
-    summary = summarize(only_taxes, "Жетысу", report, "zhetysu-finance")
-    assert summary["kind"] == "taxes"
-    assert summary["own_share"] is None
-
-
 def test_oblast_row_shapes_by_kind():
     from minfin_block import oblast_row
 
@@ -420,153 +288,6 @@ def test_oblast_row_shapes_by_kind():
     assert "доля своих не считается" in brief
 
 
-def test_oblast_section_counts_full_forms():
-    data = {
-        "regions": [
-            {
-                "name": "А",
-                "kind": "full",
-                "year": 2026,
-                "months": 7,
-                "total": 100.0,
-                "taxes": 60.0,
-                "transfers": 20.0,
-                "pct": 98.0,
-            },
-            {
-                "name": "Б",
-                "kind": "taxes",
-                "year": 2026,
-                "months": 7,
-                "total": 50.0,
-                "taxes": 50.0,
-                "transfers": 0.0,
-                "pct": None,
-            },
-        ]
-    }
-    html = oblast_section(data)
-    assert "2 региона из двадцати" in html
-    assert "структурой доходов у 1 региона" in html
-
-
 # --- Устойчивость обхода -------------------------------------------------------
 
 
-def test_download_drops_poisoned_cache(monkeypatch, tmp_path):
-    """Кэш вложений бессрочный: тело страницы ошибки жило бы в нём вечно."""
-    import oblast
-
-    report = {"year": 2026, "months": 7, "id": 42, "document": "/uploads/report.bin"}
-    path = tmp_path / "oblast_test_2026_07_42.bin"
-    path.write_bytes(b"<!DOCTYPE html><html>" + b"z" * 9000)
-    monkeypatch.setattr(oblast, "RAW", tmp_path)
-    monkeypatch.setattr(
-        oblast,
-        "fetch_document",
-        lambda url, p, min_size=1000, expect="document", timeout=180: (
-            b"PK\x03\x04" + b"0" * 9000
-        ),
-    )
-    assert oblast.download("test", report).startswith(b"PK")
-
-
-def test_download_reuses_good_cache(monkeypatch, tmp_path):
-    import oblast
-
-    report = {"year": 2026, "months": 7, "id": 42, "document": "/uploads/report.bin"}
-    path = tmp_path / "oblast_test_2026_07_42.bin"
-    path.write_bytes(b"PK\x03\x04" + b"c" * 9000)
-    monkeypatch.setattr(oblast, "RAW", tmp_path)
-
-    def refuse(*args, **kwargs):
-        raise AssertionError("годный кэш не должен перекачиваться")
-
-    monkeypatch.setattr(oblast, "fetch_document", refuse)
-    assert oblast.download("test", report).endswith(b"c" * 100)
-
-
-def test_region_listing_survives_single_network_hiccup(monkeypatch):
-    """Обход идёт по 24 региона в восемь страниц одиночными запросами: без ретрая
-    одна сетевая икота выбрасывала регион целиком."""
-    import json
-
-    import etl
-    import oblast
-
-    listing = [
-        {
-            "id": 7,
-            "title": "Отчет об исполнении бюджета на 1 августа 2026 года",
-            "created_date": "2026-08-05",
-            "full_text": [{"document": "/uploads/report.bin"}],
-        }
-    ]
-    calls = {"n": 0}
-
-    class Response:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
-            return False
-
-        def read(self, *args):
-            return json.dumps(listing).encode()
-
-    def flaky(request, timeout=None, context=None):
-        calls["n"] += 1
-        if calls["n"] == 1:
-            raise ConnectionResetError("сброс соединения")
-        return Response()
-
-    monkeypatch.setattr(etl, "RETRY_PAUSE", 0)
-    monkeypatch.setattr(etl.urllib.request, "urlopen", flaky)
-    found = oblast.region_reports("aqmola-karzhy")
-    assert calls["n"] == 2
-    assert found[0]["id"] == 7
-
-
-def test_expenses_only_form_is_named_as_such():
-    """Абай публикует только расходы по функциональным группам: доходов в файле
-    нет вовсе, и в списке пропусков это не должно выглядеть сбоем разбора."""
-    import oblast
-
-    expenses = [
-        ["Отчет о кассовом исполнении"],
-        ["Единица измерения", "тыс. теңге"],
-        ["Коды бюджетной классификации", "Наименование", "Утвержденный бюджет"],
-        ["Расходы", "", "341139844"],
-        ["01", "Государственные услуги общего характера", "6051783"],
-    ]
-    income = [
-        ["Код", "Наименование", "Сводный план", "Исполнение"],
-        ["1", "Налоговые поступления", "200", "100"],
-        ["Расходы", "", "", ""],
-    ]
-    assert oblast.expenses_only(expenses)
-    assert not oblast.expenses_only(income)
-
-
-def test_region_without_income_reports_precise_reason(monkeypatch):
-    import oblast
-
-    report = {"id": 1, "year": 2026, "months": 7, "published": "2026-08-01"}
-    monkeypatch.setattr(oblast, "region_reports", lambda slug: [report])
-    monkeypatch.setattr(oblast, "too_old", lambda year, months: False)
-
-    class Book:
-        sheets = [("Sheet1", "sheet1")]
-
-        def rows(self, path):
-            return [["Расходы", "1"], ["01", "Оборона", "2"]]
-
-    monkeypatch.setattr(oblast, "download", lambda slug, r: b"PK\x03\x04")
-    monkeypatch.setattr(oblast, "books", lambda raw: iter([Book()]))
-    monkeypatch.setattr(oblast, "parse_word_report", lambda raw: None)
-    try:
-        oblast.fetch_region("abay-finance", "Абай")
-    except oblast.SourceError as exc:
-        assert "только расходы" in str(exc)
-    else:
-        raise AssertionError("ожидалась SourceError")

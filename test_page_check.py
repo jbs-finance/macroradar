@@ -246,9 +246,17 @@ def test_future_date_in_past_events_is_caught_and_curable(sandbox: Path):
 
 
 def test_caption_against_fact_is_caught(sandbox: Path):
+    """Подпись, обещающая больше строк, чем есть в разбивке, это расхождение.
+
+    Раньше такая подпись стояла в блоке областей. Разрез переехал в бюллетень
+    Минфина, где регионов всегда двадцать, поэтому подпись подставляется в тест.
+    """
     document = read(sandbox, "budget/index.html")
-    assert "12 регионов из двадцати" in document
-    lie = document.replace("12 регионов из двадцати", "40 регионов из двадцати")
+    lie = document.replace(
+        "<h3>Доходы регионов</h3>",
+        "<h3>Доходы регионов</h3><p>40 регионов из двадцати</p>",
+        1,
+    )
     write(sandbox, "budget/index.html", lie)
     lines = content_problems(sandbox, now=moment(sandbox))
     found = [line for line in lines if "спорят" not in line]
@@ -256,14 +264,20 @@ def test_caption_against_fact_is_caught(sandbox: Path):
 
 
 def test_shrunken_breakdown_under_caption_is_caught(sandbox: Path):
-    """Подпись обещает 12 областей, а строк осталось три."""
+    """Подпись обещает двадцать регионов, а строк осталось три.
+
+    Сама подпись на странице больше не печатается: разрез переехал в бюллетень
+    Минфина, где регионов всегда двадцать. Она подставляется здесь, чтобы проверка
+    расхождения подписи с фактом оставалась под тестом.
+    """
     document = read(sandbox, "budget/index.html")
     start = document.index('<div class="obl-row">')
     end = document.index('<p class="obl-legend">')
     rows = document[start:end].split('<div class="obl-row">')[1:]
-    assert len(rows) >= 8
+    assert len(rows) >= 18
     kept = "".join('<div class="obl-row">' + row for row in rows[:3])
-    short = document[:start] + kept + "</div>" + document[end:]
+    caption = '<p class="obl-note">20 регионов из двадцати</p>'
+    short = document[:start] + kept + "</div>" + caption + document[end:]
     write(sandbox, "budget/index.html", short)
     found = fresh(sandbox)
     assert any("подпись обещает" in line for line in found), found
