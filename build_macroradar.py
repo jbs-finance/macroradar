@@ -1,8 +1,8 @@
 """Страница-хаб Macro Radar: jbs.finance/macroradar/.
 
-Хаб только направляет: герой, пять карточек на самостоятельные темы и короткая
-памятка о том, как их читать. Сам анализ живёт на страницах тем, у каждой свой
-build_*.py, свой canonical и свой h1.
+Хаб только направляет: герой и пять карточек на самостоятельные темы. Методика
+и источники живут на отдельной странице, доступной только из футера. Сам анализ
+живёт на страницах тем, у каждой свой build_*.py, свой canonical и свой h1.
 """
 
 from __future__ import annotations
@@ -51,10 +51,7 @@ body { margin: 0; background: var(--bg); color: var(--fg);
 .radar-card p { max-width: 38ch; margin: 0; color: var(--muted-fg); font-size: .95rem; }
 .card-link { display: flex; justify-content: space-between; align-items: center; margin-top: 1.1rem; padding-top: .7rem; border-top: 1px solid var(--muted); color: var(--fg); font-size: .875rem; font-weight: 650; }
 .card-link span:last-child { color: var(--card-tone); font-size: 1.25rem; line-height: 1; }
-.method { padding: clamp(1rem, 2vw, 1.4rem); margin-bottom: 2rem; background: #EDE4D5; border-left: 3px solid var(--accent); }
-.method h2 { margin: 0 0 .5rem; font-family: Georgia, "Times New Roman", serif; font-size: 1.5rem; }
-.method p { max-width: 70ch; margin: 0; color: var(--muted-fg); }
-footer { padding-block: 1.5rem 2.5rem; border-top: 1px solid var(--muted); color: var(--muted-fg); font-size: .8125rem; } footer p { margin: 0; }
+footer { padding-block: 1.5rem 2.5rem; border-top: 1px solid var(--muted); color: var(--muted-fg); font-size: .8125rem; } footer p { margin: 0; } footer a { color: inherit; text-decoration: underline; text-underline-offset: .16em; } footer a:hover, footer a:focus-visible { color: var(--fg); }
 @media (max-width: 1000px) { .radar-card { grid-column: span 6; } }
 @media (max-width: 640px) { .radar-hero { padding-top: 1.5rem; } .radar-card { grid-column: 1 / -1; min-height: 170px; } }
 """
@@ -155,8 +152,7 @@ TEMPLATE = """<!doctype html>
 <section class="radar-grid" aria-label="Анализы Macro Radar">
 {cards}
 </section>
-<aside class="method" aria-labelledby="method-title"><h2 id="method-title">Как читать радар</h2><p>Мы не смешиваем норму, фактические поступления и макроиндикаторы в одну таблицу. Сначала выбери вопрос, затем проверь дату и источник конкретного показателя.</p></aside>
-</main><footer><p>© {year} JB Solutions. Данные собираются из открытых источников.</p></footer></div></body></html>"""
+</main><footer><p>© {year} JB Solutions. Данные собираются из открытых источников. <a href="/macroradar/methodology/">Методика и источники</a></p></footer></div></body></html>"""
 
 
 def main() -> None:

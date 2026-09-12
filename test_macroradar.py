@@ -80,6 +80,15 @@ def test_hub_has_no_leftover_tab_gluing_and_single_h1():
     assert document.count("<h1") == 1
 
 
+def test_hub_links_to_methodology_only_from_the_footer():
+    document = documents()[""]
+    assert "Как читать радар" not in document
+    assert document.count('href="/macroradar/methodology/"') == 1
+    footer = re.search(r"<footer>.*?</footer>", document, flags=re.S)
+    assert footer is not None
+    assert ">Методика и источники</a>" in footer.group(0)
+
+
 def test_hub_is_self_contained_and_csp_prohibits_executable_scripts():
     document = documents()[""]
     assert "script-src 'none'" in document
