@@ -61,7 +61,27 @@ def test_deploy_workflow_keeps_daily_refresh_and_post_deploy_smoke():
     )
     assert 'cron: "0 4 * * *"' in workflow
     assert "if: github.ref == 'refs/heads/main'" in workflow
+    assert "timeout-minutes: 30" in workflow
     assert "pages deploy dist --project-name=jbs-macroradar --branch=main" in workflow
     assert "Smoke test independent Macro Radar Pages" in workflow
+    assert "name: Restore UN Comtrade trade snapshot" in workflow
+    assert "uses: actions/cache@v4" in workflow
+    assert "path: out/trade.json" in workflow
+    assert "key: macroradar-trade-${{ runner.os }}-${{ hashFiles('trade.py') }}" in workflow
+    assert "macroradar-trade-${{ runner.os }}-" in workflow
+    assert "name: Reject stale trade data restored from cache" in workflow
+    assert 'if row.get("stale")' in workflow
+    assert "торговые данные не обновлены, публикация остановлена" in workflow
+    for step in (
+        "Collect macro pulse",
+        "Collect trade data",
+        "Derive macro radar",
+        "Collect KGD budget",
+        "Collect Minfin data",
+        "Collect regional budget data",
+        "Collect tax data",
+        "Collect National Fund data",
+    ):
+        assert f"name: {step}" in workflow
     for path in ("/", "/macro/", "/methodology/"):
         assert f"check_page {path}" in workflow

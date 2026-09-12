@@ -16,6 +16,7 @@ jobs:
   build-and-deploy:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     environment: production
     steps:
       - uses: actions/checkout@v4
@@ -30,16 +31,64 @@ jobs:
       - name: Test generators and contracts
         run: python -m pytest -q
 
-      - name: Collect fresh source data
+      # trade.py uses the prior snapshot only for the seven-day UN Comtrade
+      # breakdown cache. It still refreshes data and page_check remains a hard
+      # freshness gate, so a restored snapshot cannot turn a failed source green.
+      - name: Restore UN Comtrade trade snapshot
+        uses: actions/cache@v4
+        with:
+          path: out/trade.json
+          key: macroradar-trade-${{ runner.os }}-${{ hashFiles('trade.py') }}
+          restore-keys: |
+            macroradar-trade-${{ runner.os }}-
+
+      - name: Collect macro pulse
+        run: python etl.py out/pulse.json
+
+      - name: Collect trade data
+        run: python trade.py out/trade.json
+
+      - name: Reject stale trade data restored from cache
         run: |
-          python etl.py out/pulse.json
-          python trade.py out/trade.json
-          python radar.py out/radar.json out/pulse.json out/trade.json
-          python budget.py out/budget.json
-          python minfin.py out/minfin.json
-          python oblast.py out/oblast.json
-          python tax.py out/tax.json
-          python national_fund.py out/national_fund.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          trade = json.loads(Path("out/trade.json").read_text(encoding="utf-8"))
+          stale = [
+              f"series:{row.get('series_id', 'unknown')}"
+              for row in trade.get("series", [])
+              if row.get("stale")
+          ]
+          stale.extend(
+              f"breakdown:{row.get('id', 'unknown')}"
+              for row in trade.get("breakdowns", [])
+              if row.get("stale")
+          )
+          if stale:
+              raise SystemExit(
+                  "торговые данные не обновлены, публикация остановлена: "
+                  + ", ".join(stale)
+              )
+          PY
+
+      - name: Derive macro radar
+        run: python radar.py out/radar.json out/pulse.json out/trade.json
+
+      - name: Collect KGD budget
+        run: python budget.py out/budget.json
+
+      - name: Collect Minfin data
+        run: python minfin.py out/minfin.json
+
+      - name: Collect regional budget data
+        run: python oblast.py out/oblast.json
+
+      - name: Collect tax data
+        run: python tax.py out/tax.json
+
+      - name: Collect National Fund data
+        run: python national_fund.py out/national_fund.json
 
       - name: Build isolated Pages tree and run page_check
         run: python scripts/build_pages.py --output dist --site-url https://macroradar.jbs.finance
