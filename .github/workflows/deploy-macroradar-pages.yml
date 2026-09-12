@@ -90,8 +90,13 @@ jobs:
       - name: Collect National Fund data
         run: python national_fund.py out/national_fund.json
 
+      - name: Test path-preserving Worker contract
+        run: node --test worker/test_proxy.mjs
+
       - name: Build isolated Pages tree and run page_check
-        run: python scripts/build_pages.py --output dist --site-url https://macroradar.jbs.finance
+        run: >
+          python scripts/build_pages.py --output dist
+          --site-url https://jbs.finance --path-prefix /macroradar
 
       - name: Publish Macro Radar only
         uses: cloudflare/wrangler-action@v3
@@ -100,19 +105,37 @@ jobs:
           accountId: 6a290aa254b51e327ec66ae92696a9e1
           command: pages deploy dist --project-name=jbs-macroradar --branch=main
 
-      - name: Smoke test independent Macro Radar Pages
+      - name: Deploy path-preserving Macro Radar Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: 6a290aa254b51e327ec66ae92696a9e1
+          command: deploy --config worker/wrangler.toml
+
+      - name: Smoke test Macro Radar public URL
         shell: bash
         run: |
           set -euo pipefail
+          check_root_redirect() {
+            local headers code
+            headers="$(mktemp)"
+            trap 'rm -f "$headers"' RETURN
+            code="$(curl --silent --show-error --dump-header "$headers" --output /dev/null --write-out '%{http_code}' --max-time 30 https://jbs.finance/macroradar)"
+            if [[ "$code" != "308" ]] || ! grep -Fqi '^location: https://jbs.finance/macroradar/' "$headers" || ! grep -Fqi '^x-macroradar-upstream: jbs-macroradar-pages' "$headers"; then
+              echo "Bare Macro Radar URL did not redirect through the isolated Worker" >&2
+              return 1
+            fi
+          }
           check_page() {
             local path="$1"
             local canonical="$2"
-            local body
+            local body headers
             body="$(mktemp)"
-            trap 'rm -f "$body"' RETURN
+            headers="$(mktemp)"
+            trap 'rm -f "$body" "$headers"' RETURN
             for attempt in 1 2 3 4 5 6; do
-              code="$(curl --location --silent --show-error --output "$body" --write-out '%{http_code}' --max-time 30 "https://macroradar.jbs.finance${path}")"
-              if [[ "$code" == "200" ]] && grep -Fq "<link rel=\"canonical\" href=\"${canonical}\">" "$body" && ! grep -Fq 'href="/macroradar/' "$body" && ! grep -Fq 'https://jbs.finance/macroradar/' "$body"; then
+              code="$(curl --location --silent --show-error --dump-header "$headers" --output "$body" --write-out '%{http_code}' --max-time 30 "https://jbs.finance${path}")"
+              if [[ "$code" == "200" ]] && grep -Fq "<link rel=\"canonical\" href=\"${canonical}\">" "$body" && grep -Fq 'href="/macroradar/' "$body" && grep -Fq 'https://jbs.finance/macroradar/' "$body" && grep -Fqi '^x-macroradar-upstream: jbs-macroradar-pages' "$headers"; then
                 return 0
               fi
               echo "Smoke attempt ${attempt} failed for ${path}: HTTP ${code}" >&2
@@ -121,6 +144,7 @@ jobs:
             echo "Smoke test failed for ${path}" >&2
             return 1
           }
-          check_page / https://macroradar.jbs.finance/
-          check_page /macro/ https://macroradar.jbs.finance/macro/
-          check_page /methodology/ https://macroradar.jbs.finance/methodology/
+          check_root_redirect
+          check_page /macroradar/ https://jbs.finance/macroradar/
+          check_page /macroradar/macro/ https://jbs.finance/macroradar/macro/
+          check_page /macroradar/methodology/ https://jbs.finance/macroradar/methodology/

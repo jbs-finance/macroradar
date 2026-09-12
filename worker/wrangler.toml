@@ -1,0 +1,12 @@
+name = "jbs-macroradar-edge"
+main = "src/index.mjs"
+compatibility_date = "2026-09-12"
+workers_dev = false
+
+routes = [
+  { pattern = "jbs.finance/macroradar", zone_name = "jbs.finance" },
+  { pattern = "jbs.finance/macroradar/*", zone_name = "jbs.finance" },
+]
+
+[vars]
+PAGES_ORIGIN = "https://jbs-macroradar.pages.dev"

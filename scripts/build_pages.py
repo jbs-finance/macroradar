@@ -2,9 +2,10 @@
 """Собирает самостоятельный статический сайт Macro Radar для Cloudflare Pages.
 
 Генераторы остаются общими с публикацией на jbs.finance. Этот адаптер только
-раскладывает результат в дерево Pages и детерминированно заменяет URL-контракт:
-в отдельном продукте корень ``https://macroradar.jbs.finance/`` соответствует
-бывшему ``https://jbs.finance/macroradar/``. CTA на основной сайт не меняется.
+раскладывает результат в корневое дерево Pages и детерминированно заменяет
+публичный URL-контракт. По умолчанию файл ``dist/macro/index.html`` обслуживается
+через ``https://jbs.finance/macroradar/macro/`` Worker-прокси, который снимает
+префикс только перед обращением к Pages. CTA на основной сайт не меняется.
 """
 
 from __future__ import annotations
@@ -26,7 +27,8 @@ from build_tax import build as build_tax
 from build_trade import build as build_trade
 import page_check
 
-SITE_URL = "https://macroradar.jbs.finance"
+SITE_URL = "https://jbs.finance"
+PUBLIC_PREFIX = "/macroradar"
 PAGE_PATHS = {
     "hub": "index.html",
     "macro": "macro/index.html",
@@ -111,18 +113,29 @@ def methodology() -> str:
 <p>© JB Solutions</p></main></body></html>"""
 
 
-def standalone(document: str, site_url: str) -> str:
-    """Переводит только URL-контракт радара на корень отдельного домена."""
-    document = document.replace(
-        "https://jbs.finance/macroradar/", f"{site_url.rstrip('/')}/"
-    )
+def normalized_prefix(path_prefix: str) -> str:
+    """Возвращает пустой префикс либо URL-путь без завершающего слеша."""
+    if path_prefix in ("", "/"):
+        return ""
+    return "/" + path_prefix.strip("/")
+
+
+def standalone(
+    document: str, site_url: str, path_prefix: str = PUBLIC_PREFIX
+) -> str:
+    """Переводит URL-контракт радара, не меняя физическое дерево Pages."""
+    prefix = normalized_prefix(path_prefix)
+    public_root = f"{site_url.rstrip('/')}{prefix}/"
+    document = document.replace("https://jbs.finance/macroradar/", public_root)
     # Заменяем путь только в начале URL-значения. Глобальная замена ломала CTA
     # ``https://jbs.finance/ai/macroradar/``, который намеренно остаётся на
     # основном сайте, а не в отдельном продукте.
-    return document.replace('"/macroradar/', '"/')
+    return document.replace('"/macroradar/', f'"{prefix}/')
 
 
-def documents(data: dict[str, dict], site_url: str) -> dict[str, str]:
+def documents(
+    data: dict[str, dict], site_url: str, path_prefix: str = PUBLIC_PREFIX
+) -> dict[str, str]:
     raw = {
         "hub": build_hub(),
         "macro": build_radar(data["radar"], data["pulse"], data["trade"]),
@@ -132,17 +145,22 @@ def documents(data: dict[str, dict], site_url: str) -> dict[str, str]:
         "tax": build_tax(data["tax"]),
         "methodology": methodology(),
     }
-    return {name: standalone(document, site_url) for name, document in raw.items()}
+    return {
+        name: standalone(document, site_url, path_prefix)
+        for name, document in raw.items()
+    }
 
 
-def write_tree(target: Path, data: dict[str, dict], site_url: str) -> None:
+def write_tree(
+    target: Path, data: dict[str, dict], site_url: str, path_prefix: str = PUBLIC_PREFIX
+) -> None:
     if target.exists():
         raise FileExistsError(
             f"каталог сборки уже существует: {target}; выбери новый --output"
         )
     target.mkdir(parents=True)
     (target / "_headers").write_text(HEADERS, encoding="utf-8")
-    for name, document in documents(data, site_url).items():
+    for name, document in documents(data, site_url, path_prefix).items():
         path = target / PAGE_PATHS[name]
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(document, encoding="utf-8")
@@ -152,20 +170,27 @@ def write_tree(target: Path, data: dict[str, dict], site_url: str) -> None:
         path.write_text(json.dumps(data[key], ensure_ascii=False), encoding="utf-8")
 
 
-def verify(target: Path, site_url: str, now: datetime | None = None) -> list[str]:
+def verify(
+    target: Path,
+    site_url: str,
+    path_prefix: str = PUBLIC_PREFIX,
+    now: datetime | None = None,
+) -> list[str]:
     old_site, old_path = page_check.SITE, page_check.BASE_PATH
     try:
-        page_check.configure_urls(site_url, "/")
+        page_check.configure_urls(site_url, path_prefix or "/")
         return page_check.problems(target) + page_check.content_problems(target, now=now)
     finally:
         page_check.configure_urls(old_site, old_path)
 
 
-def verify_structure(target: Path, site_url: str) -> list[str]:
+def verify_structure(
+    target: Path, site_url: str, path_prefix: str = PUBLIC_PREFIX
+) -> list[str]:
     """Проверяет URL и перелинковку offline fixtures без заявления о свежести."""
     old_site, old_path = page_check.SITE, page_check.BASE_PATH
     try:
-        page_check.configure_urls(site_url, "/")
+        page_check.configure_urls(site_url, path_prefix or "/")
         return page_check.problems(target)
     finally:
         page_check.configure_urls(old_site, old_path)
@@ -177,14 +202,19 @@ def main() -> None:
     parser.add_argument("--data-dir", type=Path, default=ROOT / "out")
     parser.add_argument("--fixtures", action="store_true", help="offline fixtures из репозитория")
     parser.add_argument("--site-url", default=SITE_URL)
+    parser.add_argument(
+        "--path-prefix",
+        default=PUBLIC_PREFIX,
+        help="публичный префикс URL, который Worker снимает перед Pages",
+    )
     args = parser.parse_args()
 
     data = load_inputs(args.data_dir, args.fixtures)
-    write_tree(args.output, data, args.site_url)
+    write_tree(args.output, data, args.site_url, args.path_prefix)
     found = (
-        verify_structure(args.output, args.site_url)
+        verify_structure(args.output, args.site_url, args.path_prefix)
         if args.fixtures
-        else verify(args.output, args.site_url)
+        else verify(args.output, args.site_url, args.path_prefix)
     )
     if found:
         for line in found:
