@@ -363,10 +363,12 @@ class TestPage:
         assert "Цикл смягчения." in page
         assert 'class="range"' in page
 
-    def test_events_and_calendar_rendered(self):
+    def test_technical_journal_is_not_rendered_on_working_page(self):
         page = build(self.radar(), self.pulse(), {})
-        assert "снизил базовую ставку" in page
-        assert "Решение НБРК" in page
+        assert "Что изменилось" not in page
+        assert "Ближайшие релизы" not in page
+        assert "Источники и свежесть данных" not in page
+        assert "Как читать эти цифры" not in page
         assert "Следующее решение по базовой ставке" in page
 
     def test_no_resources_loaded_from_outside(self):

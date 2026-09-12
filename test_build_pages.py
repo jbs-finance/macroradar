@@ -9,6 +9,7 @@ from scripts.build_pages import (
     PAGE_PATHS,
     PUBLIC_PREFIX,
     SITE_URL,
+    documents,
     load_inputs,
     verify_structure,
     write_tree,
@@ -43,6 +44,25 @@ def test_fixture_build_can_use_root_urls_behind_another_domain(tmp_path: Path):
     assert 'href="/macroradar/' not in hub
     assert 'https://macroradar.jbs.finance/' in hub
     assert verify_structure(target, "https://macroradar.jbs.finance", "") == []
+
+
+def test_methodology_contains_technical_journal_not_macro_page():
+    data = load_inputs(Path("unused"), fixtures=True)
+    pages = documents(data, SITE_URL)
+
+    macro = pages["macro"]
+    methodology = pages["methodology"]
+    for marker in (
+        "Что изменилось",
+        "Ближайшие релизы",
+        "Источники и свежесть данных",
+        "Как читать эти цифры",
+    ):
+        assert marker not in macro
+        assert marker in methodology
+    assert 'id="events"' in methodology
+    assert 'id="calendar"' in methodology
+    assert 'id="sources"' in methodology
 
 
 def test_pages_headers_prohibit_scripts_for_every_static_route(tmp_path: Path):

@@ -344,7 +344,7 @@ DATASETS = {
 
 # Блоки, где все даты обязаны быть в прошлом. Календарь будущих релизов сюда
 # не входит: даты вперёд там норма.
-PAST_SECTIONS = {"macro": ("#events",)}
+PAST_SECTIONS = {"macro": ()}
 
 # Страницы, которые публикуют штамп сборки: у хаба и Нацфонда его нет.
 STAMPED = ("macro", "trade", "budget", "tax")
@@ -377,14 +377,11 @@ SECTIONS = {
     ),
     "macro": (
         Section("#scan", "три секунды", numbers=7, charts=5),
-        Section("#events", "что изменилось", items=3),
-        Section("#calendar", "ближайшие релизы", items=6),
         Section("#fx", "официальные курсы валют", numbers=4, charts=4),
         Section("#macro-economy", "экономика", numbers=5, charts=5),
         Section("#bns", "данные БНС", numbers=3, charts=3),
         Section("#business", "деловая активность", numbers=5),
         Section("#peers", "Казахстан среди соседей", numbers=3, items=9),
-        Section("#sources", "источники и свежесть", rows=12),
     ),
     "trade": (
         Section("Товарооборот", "товарооборот", numbers=3, charts=3),
@@ -415,6 +412,19 @@ SECTIONS = {
         Section("Сроки и санкции", "сроки и санкции", rows=5),
     ),
 }
+
+TECHNICAL_SECTIONS = (
+    Section("#events", "что изменилось", items=3),
+    Section("#calendar", "ближайшие релизы", items=6),
+    Section("#sources", "источники и свежесть", rows=12),
+)
+
+TECHNICAL_MARKERS = (
+    "Что изменилось",
+    "Ближайшие релизы",
+    "Источники и свежесть данных",
+    "Как читать эти цифры",
+)
 
 
 def level(node: Node) -> int:
@@ -535,6 +545,58 @@ def section_problems(relpath: str, root: Node, slug: str) -> list[str]:
                 found.append(
                     f"{relpath}: секция «{spec.title}»: ожидалось {name} "
                     f"не меньше {want}, найдено {got[kind]}"
+                )
+    return found
+
+
+def technical_content_problems(base: Path, now: datetime) -> list[str]:
+    """Технический журнал должен быть в методике, но не на рабочей странице."""
+    found = []
+    macro_path = base / PAGES["macro"]
+    if macro_path.exists():
+        macro = macro_path.read_text(encoding="utf-8")
+        for marker in TECHNICAL_MARKERS:
+            if marker in macro:
+                found.append(
+                    f"{PAGES['macro']}: технический блок «{marker}» должен быть в методике"
+                )
+
+    method_path = base / METHOD_PAGE
+    if not method_path.exists():
+        return found
+    root = Tree(method_path.read_text(encoding="utf-8")).root
+    for spec in TECHNICAL_SECTIONS:
+        region = region_for(root, spec.anchor)
+        if region is None:
+            found.append(
+                f"{METHOD_PAGE}: секции «{spec.title}» нет на странице "
+                f"(искали по {spec.anchor})"
+            )
+            continue
+        got = measure(region)
+        for kind, name in KIND_NAMES.items():
+            want = getattr(spec, kind)
+            if want and got[kind] < want:
+                found.append(
+                    f"{METHOD_PAGE}: секция «{spec.title}»: ожидалось {name} "
+                    f"не меньше {want}, найдено {got[kind]}"
+                )
+
+    method_text = visible_text(list(root.walk()))
+    if "Как читать эти цифры" not in method_text:
+        found.append(f"{METHOD_PAGE}: нет пояснения «Как читать эти цифры»")
+
+    events = region_for(root, "#events")
+    if events is not None:
+        today = now.astimezone(ALMATY).date()
+        for node in walk(events):
+            if node.tag != "time" or "data-upcoming" in node.attrs:
+                continue
+            when = parse_stamp(node.attrs.get("datetime", ""))
+            if when and when.astimezone(ALMATY).date() > today:
+                found.append(
+                    f"{METHOD_PAGE}: дата из будущего в ленте изменений: "
+                    f"{node.attrs.get('datetime')}"
                 )
     return found
 
@@ -894,6 +956,7 @@ def content_problems(base: Path, now: datetime | None = None) -> list[str]:
     now = now or datetime.now(timezone.utc)
     found = dataset_problems(base, now)
     found.extend(methodology_problems(base))
+    found.extend(technical_content_problems(base, now))
     for slug, relpath in PAGES.items():
         path = base / relpath
         if not path.exists():

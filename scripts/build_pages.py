@@ -22,7 +22,13 @@ sys.path.insert(0, str(ROOT))
 from build_budget import build as build_budget
 from build_macroradar import build as build_hub
 from build_national_fund import build as build_national_fund
-from build_radar import build as build_radar
+from build_radar import (
+    build as build_radar,
+    calendar_markup,
+    events_markup,
+    reading_guidance_markup,
+    sources_rows,
+)
 from build_tax import build as build_tax
 from build_trade import build as build_trade
 import page_check
@@ -101,15 +107,24 @@ def load_inputs(data_dir: Path, fixtures: bool) -> dict[str, dict]:
     return loaded
 
 
-def methodology() -> str:
-    return """<!doctype html>
+def methodology(radar: dict, pulse: dict) -> str:
+    """Техническое приложение к рабочей странице Macro Radar.
+
+    Здесь остаются динамические сведения, нужные для проверки данных, но не для
+    ежедневного чтения показателей: лента изменений, ожидаемые релизы и
+    построчная свежесть рядов.
+    """
+    rows = sources_rows(list(pulse.get("series", [])) + list(radar.get("series", [])))
+    return f"""<!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="Методика и источники Macro Radar Казахстана">
 <link rel="canonical" href="https://jbs.finance/macroradar/methodology/"><title>Методика и источники Macro Radar</title>
-<style>body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.6 system-ui;color:#1c1c2e}a{color:#a8522f}</style></head>
+<style>body{{max-width:70rem;margin:2rem auto;padding:0 1rem;font:16px/1.6 system-ui;color:#1c1c2e;background:#f8f5f0}}a{{color:#a8522f}}section{{margin:2.5rem 0}}.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(18rem,1fr));gap:1.5rem}}.panel{{padding:1.25rem;background:#fff;border:1px solid #ded5ca;border-radius:.75rem}}ol{{padding-left:1.2rem}}li{{margin:.55rem 0}}time{{font-family:ui-monospace,SFMono-Regular,monospace;color:#6e6259;font-size:.9em}}.kind{{display:inline-block;width:.5rem;height:.5rem;border-radius:50%;background:#a8522f;margin-right:.35rem}}.kind-stat{{background:#556b8e}}.type{{color:#6e6259;font-size:.9em}}.table-wrap{{overflow-x:auto;background:#fff;border:1px solid #ded5ca;border-radius:.75rem}}table{{border-collapse:collapse;width:100%;min-width:48rem}}th,td{{padding:.7rem .8rem;text-align:left;vertical-align:top;border-bottom:1px solid #e7dfd5}}th{{color:#6e6259;font-size:.85rem}}details{{background:#fff;border:1px solid #ded5ca;border-radius:.75rem;padding:1rem}}summary{{cursor:pointer;font-weight:700}}</style></head>
 <body><main id="main-content"><p><a href="/macroradar/">← Macro Radar</a></p><h1>Методика и источники</h1>
 <h2>Как читать отчёт</h2><p>Каждый показатель содержит дату, источник и пояснение. Сначала смотри на свежесть ряда, затем на динамику, а для решения сверяй цифры с первоисточником.</p>
-<h2>Источники</h2><p>Используются открытые данные БНС, НБРК, Минфина, КГД, Всемирного банка и UN Comtrade. Если источник не обновился, последняя точка помечается как устаревшая, а не заменяется оценкой.</p>
+<section class="grid" aria-label="Журнал данных"><section class="panel feed" id="events" aria-labelledby="events-title"><h2 id="events-title">Что изменилось</h2>{events_markup(radar.get("events", []))}</section><section class="panel feed" id="calendar" aria-labelledby="calendar-title"><h2 id="calendar-title">Ближайшие релизы</h2>{calendar_markup(radar.get("calendar", []))}</section></section>
+<section id="sources" aria-labelledby="sources-title"><h2 id="sources-title">Источники и свежесть данных</h2><p>Используются открытые данные БНС, НБРК, Минфина, КГД, Всемирного банка и UN Comtrade. Если источник не обновился, последняя точка помечается как устаревшая, а не заменяется оценкой.</p><div class="table-wrap"><table><thead><tr><th scope="col">Показатель</th><th scope="col">Источник</th><th scope="col">Точек</th><th scope="col">Последняя</th><th scope="col">Забрано</th><th scope="col">Статус</th></tr></thead><tbody>{rows}</tbody></table></div></section>
+<details id="reading-guidance"><summary>Как читать эти цифры</summary><div>{reading_guidance_markup()}</div></details>
 <p>© JB Solutions</p></main></body></html>"""
 
 
@@ -143,7 +158,7 @@ def documents(
         "national_fund": build_national_fund(data["national_fund"]),
         "budget": build_budget(data["minfin"], data["budget"], data["oblast"]),
         "tax": build_tax(data["tax"]),
-        "methodology": methodology(),
+        "methodology": methodology(data["radar"], data["pulse"]),
     }
     return {
         name: standalone(document, site_url, path_prefix)

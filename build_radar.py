@@ -2,8 +2,8 @@
 
 Верх страницы рассчитан на три секунды: семь показателей, у каждого четыре слоя
 контекста (значение, изменение, место в диапазоне за пять лет, форма движения) и
-одна строка о том, что это значит для бизнеса. Ниже лента событий, ближайшие релизы
-и полный состав пульса.
+одна строка о том, что это значит для бизнеса. Технический журнал, календарь
+релизов и состав источников опубликованы на странице «Методика и источники».
 
 Запуск: .venv/bin/python build_radar.py out/radar.html out/radar.json out/pulse.json out/trade.json
 """
@@ -209,6 +209,27 @@ def calendar_markup(calendar: list[dict]) -> str:
     return f"        <ol>\n{items}\n        </ol>"
 
 
+def reading_guidance_markup() -> str:
+    """Пояснения к данным живут в методике, а не рядом с рабочими карточками."""
+    return """<ul>
+          <li>У базовой ставки показана дата установления из таблицы решений НБРК:
+            решение объявляют за несколько дней до того, как новая ставка начинает
+            действовать, поэтому дата бывает на пару дней впереди сегодняшней.</li>
+          <li>Строка «что это значит» это правило по порогам, а не мнение аналитика: два
+            снижения ставки подряд дают «цикл смягчения», инфляция выше цели НБРК даёт
+            «закладывайте индексацию». Правила открыты в коде радара.</li>
+          <li>Диапазон за пять лет показывает, где текущее значение стоит между минимумом и
+            максимумом этого периода. Ось графика растянута по размаху, а не от нуля.</li>
+          <li>Инфляция год к году берётся из ежемесячной публикации Бюро национальной
+            статистики и накапливается с момента запуска радара: история удлиняется на одну
+            точку в месяц.</li>
+          <li>Курсы валют официальные, на первое число месяца и на дату сборки. Годовые
+            показатели международной базы отстают примерно на год: это лаг источника.</li>
+          <li>Если ряд не удалось обновить, показывается прошлое значение с пометкой
+            «данные устарели», а не пустой график.</li>
+        </ul>"""
+
+
 def aged_badge(last: str | None, freq: str, stale: bool) -> str:
     """Бейдж только при проблеме: у соседей и деловой активности его нет, пока
     данные свежие, и заводить там постоянную отметку «актуально» незачем."""
@@ -364,7 +385,6 @@ def build(radar: dict, pulse: dict, trade: dict) -> str:
         dated_card(s, "годом ранее") for s in BNS_ORDER if s in by_id
     )
 
-    all_series = list(pulse.get("series", [])) + list(radar.get("series", []))
     return TEMPLATE.format(
         style=STYLE + HEADER_STYLE + ACCESSIBILITY_STYLE + RADAR_STYLE + CTA_STYLE + NO_DATA_STYLE,
         meta=meta_tags(
@@ -385,12 +405,9 @@ def build(radar: dict, pulse: dict, trade: dict) -> str:
         next_line=next_line,
         issues_block=issues_block,
         scan=scan,
-        events=events_markup(radar.get("events", [])),
-        calendar=calendar_markup(radar.get("calendar", [])),
         fx_cards=fx_cards,
         macro_cards=macro_cards,
         bns_cards=bns_cards,
-        sources_rows=sources_rows(all_series),
         peers=peers_markup(radar.get("neighbours", [])),
         business_activity=business_activity_markup(
             radar.get("business_activity"), signals.get("business_activity", "")
@@ -432,17 +449,6 @@ TEMPLATE = """<!doctype html>
 {scan}
     </div>
 
-    <div class="two-col" style="margin-top: 2.5rem">
-      <section class="feed" id="events" aria-labelledby="events-title">
-        <h2 id="events-title">Что изменилось</h2>
-{events}
-      </section>
-      <section class="feed" id="calendar" aria-labelledby="calendar-title">
-        <h2 id="calendar-title">Ближайшие релизы</h2>
-{calendar}
-      </section>
-    </div>
-
     <h2 class="section" id="fx">Официальные курсы валют</h2>
     <div class="grid">
 {fx_cards}
@@ -476,43 +482,6 @@ TEMPLATE = """<!doctype html>
     </div>
 
 {cta}
-
-    <h2 class="section" id="sources">Источники и свежесть данных</h2>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr><th scope="col">Показатель</th><th scope="col">Источник</th>
-            <th scope="col">Точек</th><th scope="col">Последняя</th>
-            <th scope="col">Забрано</th><th scope="col">Статус</th></tr>
-        </thead>
-        <tbody>
-{sources_rows}
-        </tbody>
-      </table>
-    </div>
-
-    <details>
-      <summary>Как читать эти цифры</summary>
-      <div class="details-body">
-        <ul>
-          <li>У базовой ставки показана дата установления из таблицы решений НБРК:
-            решение объявляют за несколько дней до того, как новая ставка начинает
-            действовать, поэтому дата бывает на пару дней впереди сегодняшней.</li>
-          <li>Строка «что это значит» это правило по порогам, а не мнение аналитика: два
-            снижения ставки подряд дают «цикл смягчения», инфляция выше цели НБРК даёт
-            «закладывайте индексацию». Правила открыты в коде радара.</li>
-          <li>Диапазон за пять лет показывает, где текущее значение стоит между минимумом и
-            максимумом этого периода. Ось графика растянута по размаху, а не от нуля.</li>
-          <li>Инфляция год к году берётся из ежемесячной публикации Бюро национальной
-            статистики и накапливается с момента запуска радара: история удлиняется на одну
-            точку в месяц.</li>
-          <li>Курсы валют официальные, на первое число месяца и на дату сборки. Годовые
-            показатели международной базы отстают примерно на год: это лаг источника.</li>
-          <li>Если ряд не удалось обновить, показывается прошлое значение с пометкой
-            «данные устарели», а не пустой график.</li>
-        </ul>
-      </div>
-    </details>
   </main>
 
   {footer}

@@ -12,7 +12,6 @@ HTML лежат JSON-выгрузки, а фикстуры собирают го
 """
 
 import json
-import os
 import re
 import shutil
 import subprocess
@@ -23,15 +22,9 @@ from pathlib import Path
 import pytest
 
 from page_check import DATASETS, content_problems, parse_stamp, problems
+from scripts.build_pages import SITE_URL, load_inputs, write_tree
 
 HERE = Path(__file__).resolve().parent
-LIVE = Path(
-    os.environ.get(
-        "MACRORADAR_PUBLIC",
-        HERE.parent / "jbs-finance" / "public" / "macroradar",
-    )
-)
-
 # Расхождения, которые на живых страницах уже есть и чинятся в данных, а не в
 # гейте. Тесты следят, чтобы к ним не добавилось новых: список должен пустеть.
 KNOWN: tuple[str, ...] = ()
@@ -42,16 +35,17 @@ def known(line: str) -> bool:
 
 
 @pytest.fixture
-def live() -> Path:
-    if not (LIVE / "index.html").exists():
-        pytest.skip(f"нет публикации {LIVE}")
-    return LIVE
+def live(tmp_path: Path) -> Path:
+    """Новая Pages-сборка на текущих выгрузках, а не прошлый опубликованный HTML."""
+    base = tmp_path / "macroradar"
+    write_tree(base, load_inputs(HERE / "out", fixtures=False), SITE_URL)
+    return base
 
 
 @pytest.fixture
 def sandbox(live: Path, tmp_path: Path) -> Path:
-    """Копия публикации: ломать будем её, а не рабочий каталог."""
-    base = tmp_path / "macroradar"
+    """Копия новой сборки: ломать будем её, а не рабочий каталог."""
+    base = tmp_path / "sandbox"
     shutil.copytree(live, base)
     return base
 
@@ -105,9 +99,8 @@ def test_methodology_is_a_footer_link_to_its_own_page(sandbox: Path):
     method = read(sandbox, "methodology/index.html")
     assert "Как читать отчёт" in method
     assert 'href="https://jbs.finance/macroradar/methodology/"' in method
-    assert 'href="/macroradar/methodology/"' not in re.search(
-        r'<nav class="tabs".*?</nav>', method, flags=re.S
-    ).group(0)
+    tabs = re.search(r'<nav class="tabs".*?</nav>', method, flags=re.S)
+    assert tabs is None or 'href="/macroradar/methodology/"' not in tabs.group(0)
     assert 'class="radar-card' not in method
     assert not fresh(sandbox)
 
@@ -252,12 +245,12 @@ def test_table_without_data_rows_is_caught(sandbox: Path):
 
 
 def test_future_date_in_past_events_is_caught_and_curable(sandbox: Path):
-    document = read(sandbox, "macro/index.html")
+    document = read(sandbox, "methodology/index.html")
     events = document.index('id="events"')
     tail = document[events:]
     past = re.sub(r'datetime="20\d\d-\d\d-\d\d"', 'datetime="2020-01-01"', tail)
     fixed = document[:events] + past
-    write(sandbox, "macro/index.html", fixed)
+    write(sandbox, "methodology/index.html", fixed)
     lines = content_problems(sandbox, now=moment(sandbox))
     assert not any("дата из будущего" in line for line in lines), lines
 
@@ -269,7 +262,7 @@ def test_future_date_in_past_events_is_caught_and_curable(sandbox: Path):
         tail,
         count=1,
     )
-    write(sandbox, "macro/index.html", ahead)
+    write(sandbox, "methodology/index.html", ahead)
     lines = content_problems(sandbox, now=moment(sandbox))
     assert any("дата из будущего" in line for line in lines), lines
 
