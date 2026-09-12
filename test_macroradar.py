@@ -89,6 +89,13 @@ def test_hub_links_to_methodology_only_from_the_footer():
     assert ">Методика и источники</a>" in footer.group(0)
 
 
+def test_hub_respects_reduced_motion():
+    document = documents()[""]
+    assert "@media (prefers-reduced-motion: reduce)" in document
+    assert ".radar-card, footer a { transition: none; }" in document
+    assert ".radar-card:hover, .radar-card:focus-visible { transform: none; }" in document
+
+
 def test_hub_is_self_contained_and_csp_prohibits_executable_scripts():
     document = documents()[""]
     assert "script-src 'none'" in document

@@ -43,7 +43,7 @@ body { margin: 0; background: var(--bg); color: var(--fg);
 .radar-hero .lede { max-width: 62ch; font-size: clamp(1rem, 1.2vw, 1.1rem); line-height: 1.5; }
 .reading-note { max-width: 66ch; padding: 1rem 0; border-top: 1px solid var(--line); color: var(--muted-fg); font-size: .9rem; }
 .radar-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: .875rem; padding-bottom: clamp(2rem, 4vw, 3rem); }
-.radar-card { grid-column: span 4; min-height: 190px; display: flex; flex-direction: column; justify-content: space-between; padding: clamp(1.25rem, 3vw, 2rem); background: var(--card); color: var(--fg); text-decoration: none; border: 1px solid var(--muted); border-top: 3px solid var(--card-tone, var(--accent)); border-radius: var(--radius); }
+.radar-card { grid-column: span 4; min-height: 190px; display: flex; flex-direction: column; justify-content: space-between; padding: clamp(1.25rem, 3vw, 2rem); background: var(--card); color: var(--fg); text-decoration: none; border: 1px solid var(--muted); border-top: 3px solid var(--card-tone, var(--accent)); border-radius: var(--radius); transition: transform var(--dur-in) var(--ease-out), box-shadow var(--dur-in) var(--ease-out); }
 .radar-card:hover, .radar-card:focus-visible { transform: translateY(-4px); box-shadow: 0 14px 26px rgba(44, 36, 32, .11); outline: none; }
 .radar-card--macro { --card-tone: #A8522F; } .radar-card--trade { --card-tone: #2F6B4F; } .radar-card--fund { --card-tone: #2F6B4F; } .radar-card--budget { --card-tone: #8A6A2C; } .radar-card--tax { --card-tone: #755C8C; }
 .card-kicker { margin: 0; color: var(--card-tone); font-size: .75rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
@@ -51,9 +51,10 @@ body { margin: 0; background: var(--bg); color: var(--fg);
 .radar-card p { max-width: 38ch; margin: 0; color: var(--muted-fg); font-size: .95rem; }
 .card-link { display: flex; justify-content: space-between; align-items: center; margin-top: 1.1rem; padding-top: .7rem; border-top: 1px solid var(--muted); color: var(--fg); font-size: .875rem; font-weight: 650; }
 .card-link span:last-child { color: var(--card-tone); font-size: 1.25rem; line-height: 1; }
-footer { padding-block: 1.5rem 2.5rem; border-top: 1px solid var(--muted); color: var(--muted-fg); font-size: .8125rem; } footer p { margin: 0; } footer a { color: inherit; text-decoration: underline; text-underline-offset: .16em; } footer a:hover, footer a:focus-visible { color: var(--fg); }
+footer { padding-block: 1.5rem 2.5rem; border-top: 1px solid var(--muted); color: var(--muted-fg); font-size: .8125rem; } footer p { margin: 0; } footer a { color: inherit; text-decoration: underline; text-underline-offset: .16em; transition: color var(--dur-in) var(--ease-out); } footer a:hover, footer a:focus-visible { color: var(--fg); }
 @media (max-width: 1000px) { .radar-card { grid-column: span 6; } }
 @media (max-width: 640px) { .radar-hero { padding-top: 1.5rem; } .radar-card { grid-column: 1 / -1; min-height: 170px; } }
+@media (prefers-reduced-motion: reduce) { .radar-card, footer a { transition: none; } .radar-card:hover, .radar-card:focus-visible { transform: none; } }
 """
 
 SECTIONS = (
