@@ -16,13 +16,16 @@ from datetime import date, datetime
 from pathlib import Path
 
 from layout import (
+    ACCESSIBILITY_STYLE,
     CTA_STYLE,
     HEADER_STYLE,
     NO_DATA_STYLE,
     cta_block,
+    detail_footer,
     meta_tags,
     no_data,
     site_header,
+    skip_link,
 )
 from build_pulse import STYLE, fmt_date
 
@@ -145,7 +148,7 @@ def build(data: dict) -> str:
         ,
         header=site_header('tax'),
         cta=cta_block(),
-        style=STYLE + HEADER_STYLE + CTA_STYLE + TAX_STYLE + NO_DATA_STYLE,
+        style=STYLE + HEADER_STYLE + ACCESSIBILITY_STYLE + CTA_STYLE + TAX_STYLE + NO_DATA_STYLE,
         year=data["year"],
         generated_human=generated.strftime("%d.%m.%Y %H:%M UTC"),
         generated_iso=generated.isoformat(),
@@ -163,6 +166,8 @@ def build(data: dict) -> str:
             ("Размер долга", "Сумма"),
         ),
         current_year=date.today().year,
+        skip_link=skip_link(),
+        footer=detail_footer(date.today().year),
     )
 
 
@@ -176,6 +181,7 @@ TEMPLATE = """<!doctype html>
 <style>{style}</style>
 </head>
 <body>
+{skip_link}
 {header}
 <div class="wrap">
   <header class="top">
@@ -186,7 +192,7 @@ TEMPLATE = """<!doctype html>
       Страница собрана <time datetime="{generated_iso}">{generated_human}</time></p>
   </header>
 
-  <main>
+  <main id="main-content">
     <h2>Базовые величины</h2>
     <div class="tax-base">
 {base_cards}
@@ -233,11 +239,7 @@ TEMPLATE = """<!doctype html>
 {cta}
   </main>
 
-  <footer>
-    <p>Служебная страница JB Solutions. Данные приводятся без гарантии пригодности
-      для конкретного решения.</p>
-    <p>&copy; {current_year} JB Solutions</p>
-  </footer>
+  {footer}
 </div>
 </body>
 </html>

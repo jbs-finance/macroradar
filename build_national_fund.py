@@ -9,7 +9,16 @@ from datetime import date, datetime
 from pathlib import Path
 
 from build_pulse import STYLE, fmt_num, spark
-from layout import CTA_STYLE, HEADER_STYLE, cta_block, meta_tags, site_header
+from layout import (
+    ACCESSIBILITY_STYLE,
+    CTA_STYLE,
+    HEADER_STYLE,
+    cta_block,
+    detail_footer,
+    meta_tags,
+    site_header,
+    skip_link,
+)
 
 HERE = Path(__file__).resolve().parent
 DATASET = HERE / "out" / "national_fund.json"
@@ -139,7 +148,7 @@ def build(data: dict) -> str:
             "/macroradar/national-fund/",
         ),
         header=site_header("fund"),
-        style=STYLE + HEADER_STYLE + CTA_STYLE + FUND_STYLE,
+        style=STYLE + HEADER_STYLE + ACCESSIBILITY_STYLE + CTA_STYLE + FUND_STYLE,
         generated=datetime.fromisoformat(data["generated_at"]).strftime("%d.%m.%Y %H:%M UTC"),
         asset_value=fmt_num(latest_assets["value"], 2),
         asset_date=html.escape(latest_assets["date"]),
@@ -162,6 +171,8 @@ def build(data: dict) -> str:
         return_source=html.escape(data["returns_source"], quote=True),
         issue_block=issue_block,
         cta=cta_block(),
+        skip_link=skip_link(),
+        footer=detail_footer(date.today().year),
         year=date.today().year,
     )
 
@@ -176,6 +187,7 @@ TEMPLATE = """<!doctype html>
 <style>{style}</style>
 </head>
 <body>
+{skip_link}
 {header}
 <div class="wrap">
   <header class="fund-hero">
@@ -184,7 +196,7 @@ TEMPLATE = """<!doctype html>
     <p class="updated">Собрано {generated}</p>
   </header>
 {issue_block}
-  <main>
+  <main id="main-content">
     <section class="fund-summary" aria-label="Ключевые показатели Национального фонда">
       <article class="fund-stat fund-stat--main"><p class="label">Валютные активы</p><p class="number">{asset_value}</p><p class="note">млрд USD, на конец {asset_date}</p></article>
       <article class="fund-stat"><p class="label">Изменение за 12 месяцев</p><p class="number">{annual_change}</p><p class="note">по ежемесячному ряду валютных активов</p></article>
@@ -228,7 +240,7 @@ TEMPLATE = """<!doctype html>
     <p class="section-note">Источники: <a href="{asset_source}">НБРК, валютные активы</a> и <a href="{return_source}">НБРК, доходность активов</a>.</p>
 {cta}
   </main>
-  <footer><p>Служебная страница JB Solutions. Данные из открытых источников, не инвестиционная рекомендация.</p><p>&copy; {year} JB Solutions</p></footer>
+  {footer}
 </div>
 </body>
 </html>

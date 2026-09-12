@@ -339,7 +339,7 @@ def drill_block(dynamics: dict) -> tuple[str, str]:
     block = (
         '<div class="drill">'
         + inputs
-        + f'<div class="drill-tabs" role="tablist">{tabs}</div>'
+        + f'<div class="drill-tabs">{tabs}</div>'
         + '<div class="drill-stage">'
         + "".join(stages)
         + "</div></div>"

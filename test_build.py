@@ -237,7 +237,7 @@ class TestNoDataIsVisible:
         from build_budget import build as build_budget
 
         page = build_budget(None, None, None)
-        body = re.search(r"(?s)<main>(.*)</main>", page).group(1)
+        body = re.search(r"(?s)<main\b[^>]*>(.*)</main>", page).group(1)
         assert body.count("Данные не собрались") == 3
         assert len(body) > 900
 

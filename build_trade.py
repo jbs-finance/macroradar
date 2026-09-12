@@ -16,15 +16,18 @@ from datetime import date, datetime
 from pathlib import Path
 
 from layout import (
+    ACCESSIBILITY_STYLE,
     CTA_STYLE,
     HEADER_STYLE,
     NO_DATA_STYLE,
     cta_block,
+    detail_footer,
     freshness_badge,
     issues_notice,
     meta_tags,
     no_data,
     site_header,
+    skip_link,
     with_freshness,
 )
 from build_pulse import STYLE, card, fmt_num
@@ -112,13 +115,15 @@ def build(data: dict) -> str:
         meta=meta_tags('Внешняя торговля Казахстана: экспорт, импорт, партнёры и товарные группы', 'Экспорт и импорт Казахстана, сальдо, прямые инвестиции и структура торговли по странам и товарным группам. Данные World Bank и UN Comtrade с автоматическим обновлением.', '/macroradar/trade/'),
         header=site_header('trade'),
         cta=cta_block(),
-        style=STYLE + HEADER_STYLE + CTA_STYLE + RANKING_STYLE + NO_DATA_STYLE,
+        style=STYLE + HEADER_STYLE + ACCESSIBILITY_STYLE + CTA_STYLE + RANKING_STYLE + NO_DATA_STYLE,
         generated_human=generated.strftime("%d.%m.%Y %H:%M UTC"),
         generated_iso=generated.isoformat(),
         flow_cards=flow_cards,
         invest_cards=invest_cards,
         rankings=rankings,
         issues_block=issues_block,
+        skip_link=skip_link(),
+        footer=detail_footer(date.today().year),
         year=date.today().year,
     )
 
@@ -133,6 +138,7 @@ TEMPLATE = """<!doctype html>
 <style>{style}</style>
 </head>
 <body>
+{skip_link}
 {header}
 <div class="wrap">
   <header class="top">
@@ -144,7 +150,7 @@ TEMPLATE = """<!doctype html>
 
   {issues_block}
 
-  <main>
+  <main id="main-content">
     <h2>Товарооборот</h2>
     <div class="grid">
 {flow_cards}
@@ -185,12 +191,7 @@ TEMPLATE = """<!doctype html>
 {cta}
   </main>
 
-  <footer>
-    <p>Служебная страница JB Solutions. Данные собираются автоматически из открытых
-      источников и приводятся без гарантии пригодности для конкретного решения.
-      Для расчётов и отчётности сверяйтесь с первоисточником.</p>
-    <p>&copy; {year} JB Solutions</p>
-  </footer>
+  {footer}
 </div>
 </body>
 </html>

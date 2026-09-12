@@ -127,6 +127,17 @@ def test_each_topic_page_links_back_to_the_other_five():
             assert f'href="{href}"' in document
 
 
+def test_each_topic_page_has_accessible_detail_page_chrome():
+    for topic in TOPICS:
+        document = documents()[topic]
+        assert 'class="skip-link" href="#main-content"' in document
+        assert document.index('class="skip-link"') < document.index('class="site-bar"')
+        assert '<main id="main-content">' in document
+        footer = re.search(r"<footer>.*?</footer>", document, flags=re.S)
+        assert footer is not None
+        assert 'href="/macroradar/methodology/"' in footer.group(0)
+
+
 def test_full_page_set_passes_the_structural_gate(tmp_path):
     write_pages(tmp_path, documents())
     assert problems(tmp_path) == []

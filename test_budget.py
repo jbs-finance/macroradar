@@ -257,6 +257,7 @@ def test_series_count_matches_tabs():
     html, _ = budget_section(sample_budget())
     assert html.count('name="drill-region"') == html.count('<label for="rg') == 3
     assert html.count('name="cmp-metric"') == html.count('<label for="md') == 3
+    assert 'role="tablist"' not in html
 
 
 # --- Сборка страницы -----------------------------------------------------------

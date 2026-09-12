@@ -57,6 +57,30 @@ HEADER_STYLE = """
 """
 
 
+ACCESSIBILITY_STYLE = """
+.skip-link { position: fixed; z-index: 100; inset: 0 auto auto 50%; transform: translate(-50%, -160%);
+  padding: 0.65rem 1rem; background: #1C1C2E; color: #fff; border-radius: 0 0 6px 6px;
+  font-weight: 600; text-decoration: none; transition: transform var(--dur-in) var(--ease-out); }
+.skip-link:focus-visible { transform: translate(-50%, 0); outline: 3px solid #A8522F; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .skip-link { transition: none; } }
+"""
+
+
+def skip_link() -> str:
+    """Ссылка для клавиатуры, ведущая сразу к содержимому страницы."""
+    return '<a class="skip-link" href="#main-content">Перейти к содержанию</a>'
+
+
+def detail_footer(year: int) -> str:
+    """Общий футер тематических страниц с доступной, но не навигационной методикой."""
+    return f"""<footer>
+    <p>Данные собираются из открытых источников и приводятся без гарантии пригодности
+      для конкретного решения. Для расчётов и отчётности сверяйтесь с первоисточником.</p>
+    <p><a href="/macroradar/methodology/">Методика и источники</a></p>
+    <p>&copy; {year} JB Solutions</p>
+  </footer>"""
+
+
 def site_header(active: str) -> str:
     """Тёмная полоса сайта плюс липкие вкладки радара."""
     tabs = "\n".join(

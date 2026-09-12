@@ -16,17 +16,20 @@ import sys
 from datetime import date, datetime
 from pathlib import Path
 from layout import (
+    ACCESSIBILITY_STYLE,
     CTA_STYLE,
     HEADER_STYLE,
     FRESH_BADGE,
     NO_DATA_STYLE,
     cta_block,
+    detail_footer,
     dataset_jsonld,
     freshness_badge,
     issues_notice,
     meta_tags,
     no_data,
     site_header,
+    skip_link,
     with_freshness,
 )
 
@@ -363,7 +366,7 @@ def build(radar: dict, pulse: dict, trade: dict) -> str:
 
     all_series = list(pulse.get("series", [])) + list(radar.get("series", []))
     return TEMPLATE.format(
-        style=STYLE + HEADER_STYLE + RADAR_STYLE + CTA_STYLE + NO_DATA_STYLE,
+        style=STYLE + HEADER_STYLE + ACCESSIBILITY_STYLE + RADAR_STYLE + CTA_STYLE + NO_DATA_STYLE,
         meta=meta_tags(
             "Радар экономики Казахстана: ставка, инфляция, курс, оплата труда",
             share_description(radar, by_id),
@@ -393,6 +396,8 @@ def build(radar: dict, pulse: dict, trade: dict) -> str:
             radar.get("business_activity"), signals.get("business_activity", "")
         ),
         cta=cta_block(),
+        skip_link=skip_link(),
+        footer=detail_footer(date.today().year),
         year=date.today().year,
     )
 
@@ -407,6 +412,7 @@ TEMPLATE = """<!doctype html>
 <style>{style}</style>
 </head>
 <body>
+{skip_link}
 {header}
 <div class="wrap">
   <header class="top hero">
@@ -420,7 +426,7 @@ TEMPLATE = """<!doctype html>
 
   {issues_block}
 
-  <main>
+  <main id="main-content">
     <h2 class="section" id="scan">Три секунды</h2>
     <div class="scan">
 {scan}
@@ -509,11 +515,7 @@ TEMPLATE = """<!doctype html>
     </details>
   </main>
 
-  <footer>
-    <p>Данные собираются автоматически из открытых источников и приводятся без гарантии
-      пригодности для конкретного решения. Для расчётов и отчётности сверяйтесь с первоисточником.</p>
-    <p>&copy; {year} JB Solutions</p>
-  </footer>
+  {footer}
 </div>
 </body>
 </html>

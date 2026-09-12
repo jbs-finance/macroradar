@@ -19,15 +19,18 @@ from budget_block import BUDGET_STYLE, budget_section
 from build_pulse import STYLE
 from compare_block import COMPARE_STYLE
 from layout import (
+    ACCESSIBILITY_STYLE,
     CTA_STYLE,
     HEADER_STYLE,
     NO_DATA_STYLE,
     cta_block,
+    detail_footer,
     dataset_jsonld,
     issues_notice,
     meta_tags,
     no_data,
     site_header,
+    skip_link,
 )
 from minfin_block import (
     LEVELS_STYLE,
@@ -136,6 +139,7 @@ def build(
         cta=cta_block(),
         style=STYLE
         + HEADER_STYLE
+        + ACCESSIBILITY_STYLE
         + CTA_STYLE
         + MINFIN_STYLE
         + LEVELS_STYLE
@@ -155,6 +159,8 @@ def build(
         minfin=minfin_html,
         oblast=oblast_html,
         regions=regions_html,
+        skip_link=skip_link(),
+        footer=detail_footer(date.today().year),
         generated_human=generated.strftime("%d.%m.%Y %H:%M"),
         generated_iso=generated.isoformat(timespec="seconds"),
         current_year=date.today().year,
@@ -171,6 +177,7 @@ TEMPLATE = """<!doctype html>
 <style>{style}</style>
 </head>
 <body>
+{skip_link}
 {header}
 <div class="wrap">
   <header class="top">
@@ -184,7 +191,7 @@ TEMPLATE = """<!doctype html>
 
   {issues_block}
 
-  <main>
+  <main id="main-content">
 {minfin}
 
     <h2>Отчёты областей</h2>
@@ -199,11 +206,7 @@ TEMPLATE = """<!doctype html>
 {cta}
   </main>
 
-  <footer>
-    <p>Служебная страница JB Solutions. Данные приводятся без гарантии пригодности
-      для конкретного решения.</p>
-    <p>&copy; {current_year} JB Solutions</p>
-  </footer>
+  {footer}
 </div>
 </body>
 </html>
