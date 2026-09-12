@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+from argparse import ArgumentParser
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
@@ -41,6 +42,7 @@ VOID = {
 }
 
 SITE = "https://jbs.finance"
+BASE_PATH = "/macroradar/"
 
 PAGES = {
     "": "index.html",
@@ -52,7 +54,24 @@ PAGES = {
 }
 
 METHOD_PAGE = "methodology/index.html"
-METHOD_URL = "/macroradar/methodology/"
+METHOD_URL = f"{BASE_PATH}methodology/"
+
+
+def configure_urls(site: str = SITE, base_path: str = BASE_PATH) -> None:
+    """Настраивает адрес публикации без изменения состава проверок.
+
+    Основной сайт публикует радар в ``/macroradar/``. Отдельный Pages-проект
+    обслуживает тот же набор файлов с корня собственного домена. Проверка
+    должна уметь валидировать оба адресных контракта, иначе Pages-сборка
+    формально проходит, но ведёт на старый путь основного сайта.
+    """
+    global SITE, BASE_PATH, METHOD_URL
+    if not site.startswith(("https://", "http://")):
+        raise ValueError("site должен начинаться с http:// или https://")
+    normalized = "/" + base_path.strip("/")
+    BASE_PATH = "/" if normalized == "/" else f"{normalized}/"
+    SITE = site.rstrip("/")
+    METHOD_URL = f"{BASE_PATH}methodology/"
 
 
 class Node:
@@ -100,7 +119,7 @@ class Tree(HTMLParser):
 
 
 def path_for(slug: str) -> str:
-    return f"/macroradar/{slug}/" if slug else "/macroradar/"
+    return f"{BASE_PATH}{slug}/" if slug else BASE_PATH
 
 
 def url_for(slug: str) -> str:
@@ -899,13 +918,24 @@ def content_problems(base: Path, now: datetime | None = None) -> list[str]:
     return found
 
 def main() -> None:
-    if len(sys.argv) != 2:
-        raise SystemExit(
-            "Использование: page_check.py КАТАЛОГ (например public/macroradar)"
-        )
-    base = Path(sys.argv[1])
+    parser = ArgumentParser(
+        description="Проверяет статическую сборку Macro Radar"
+    )
+    parser.add_argument("catalog", type=Path)
+    parser.add_argument("--site-url", default=SITE)
+    parser.add_argument("--base-path", default=BASE_PATH)
+    parser.add_argument(
+        "--now",
+        help="Время проверки в ISO 8601, только для воспроизводимой fixture-сборки",
+    )
+    args = parser.parse_args()
+    configure_urls(args.site_url, args.base_path)
+    base = args.catalog
     structure = problems(base)
-    content = content_problems(base)
+    now = parse_stamp(args.now) if args.now else None
+    if args.now and now is None:
+        raise SystemExit("--now должен быть датой ISO 8601")
+    content = content_problems(base, now=now)
     if structure:
         print("структура собрана неверно:")
         for line in structure:

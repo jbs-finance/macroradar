@@ -1,0 +1,77 @@
+name: Deploy Macro Radar Pages
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 4 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macroradar-pages-production
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependency
+        run: python -m pip install --disable-pip-version-check pytest
+
+      - name: Test generators and contracts
+        run: python -m pytest -q
+
+      - name: Collect fresh source data
+        run: |
+          python etl.py out/pulse.json
+          python trade.py out/trade.json
+          python radar.py out/radar.json out/pulse.json out/trade.json
+          python budget.py out/budget.json
+          python minfin.py out/minfin.json
+          python oblast.py out/oblast.json
+          python tax.py out/tax.json
+          python national_fund.py out/national_fund.json
+
+      - name: Build isolated Pages tree and run page_check
+        run: python scripts/build_pages.py --output dist --site-url https://macroradar.jbs.finance
+
+      - name: Publish Macro Radar only
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: 6a290aa254b51e327ec66ae92696a9e1
+          command: pages deploy dist --project-name=jbs-macroradar --branch=main
+
+      - name: Smoke test independent Macro Radar Pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          check_page() {
+            local path="$1"
+            local canonical="$2"
+            local body
+            body="$(mktemp)"
+            trap 'rm -f "$body"' RETURN
+            for attempt in 1 2 3 4 5 6; do
+              code="$(curl --location --silent --show-error --output "$body" --write-out '%{http_code}' --max-time 30 "https://macroradar.jbs.finance${path}")"
+              if [[ "$code" == "200" ]] && grep -Fq "<link rel=\"canonical\" href=\"${canonical}\">" "$body" && ! grep -Fq 'href="/macroradar/' "$body" && ! grep -Fq 'https://jbs.finance/macroradar/' "$body"; then
+                return 0
+              fi
+              echo "Smoke attempt ${attempt} failed for ${path}: HTTP ${code}" >&2
+              sleep 10
+            done
+            echo "Smoke test failed for ${path}" >&2
+            return 1
+          }
+          check_page / https://macroradar.jbs.finance/
+          check_page /macro/ https://macroradar.jbs.finance/macro/
+          check_page /methodology/ https://macroradar.jbs.finance/methodology/
