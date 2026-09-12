@@ -51,6 +51,9 @@ PAGES = {
     "tax": "tax/index.html",
 }
 
+METHOD_PAGE = "methodology/index.html"
+METHOD_URL = "/macroradar/methodology/"
+
 
 class Node:
     def __init__(self, tag: str, attrs: list, parent: Node | None):
@@ -190,6 +193,73 @@ def problems(base: Path) -> list[str]:
     return found
 
 
+def methodology_problems(base: Path) -> list[str]:
+    """Методика доступна из футера отдельной страницей, вне витрины и вкладок."""
+    found = []
+    hub_path = base / PAGES[""]
+    method_path = base / METHOD_PAGE
+    if not hub_path.exists():
+        return found
+
+    hub = Tree(hub_path.read_text(encoding="utf-8"))
+    hub_nodes = list(hub.root.walk())
+    links = [
+        node
+        for node in hub_nodes
+        if node.tag == "a" and node.attrs.get("href") == METHOD_URL
+    ]
+    footer = next((node for node in hub_nodes if node.tag == "footer"), None)
+    footer_links = list(footer.walk()) if footer else []
+    if len(links) != 1 or links[0] not in footer_links:
+        found.append(
+            f"{PAGES['']}: методика должна быть доступна одной ссылкой из футера"
+        )
+    elif re.sub(r"\s+", " ", visible_text([links[0]])).strip() != "Методика и источники":
+        found.append(
+            f"{PAGES['']}: подпись ссылки на методику должна быть «Методика и источники»"
+        )
+    if not method_path.exists():
+        found.append(f"{METHOD_PAGE}: отдельная страница методики не найдена")
+        return found
+
+    document = method_path.read_text(encoding="utf-8")
+    if not document.strip():
+        found.append(f"{METHOD_PAGE}: файл пустой")
+        return found
+
+    method = Tree(document)
+    nodes = list(method.root.walk())
+    if not any(node.tag == "main" for node in nodes):
+        found.append(f"{METHOD_PAGE}: нет <main>")
+    h1s = [node for node in nodes if node.tag == "h1"]
+    if len(h1s) != 1:
+        found.append(f"{METHOD_PAGE}: {len(h1s)} тегов h1 вместо одного")
+    if any(node.tag == "a" and "radar-card" in node.classes for node in nodes):
+        found.append(f"{METHOD_PAGE}: методика не должна быть плиткой радара")
+    for nav in (node for node in nodes if node.tag == "nav" and "tabs" in node.classes):
+        if any(
+            node.tag == "a" and node.attrs.get("href") == METHOD_URL
+            for node in nav.walk()
+        ):
+            found.append(f"{METHOD_PAGE}: методика не должна быть вкладкой радара")
+
+    canonical = next(
+        (
+            node
+            for node in nodes
+            if node.tag == "link" and node.attrs.get("rel") == "canonical"
+        ),
+        None,
+    )
+    expected = f"{SITE}{METHOD_URL}"
+    if canonical is None or canonical.attrs.get("href") != expected:
+        got = canonical.attrs.get("href") if canonical else None
+        found.append(f"{METHOD_PAGE}: canonical {got} вместо {expected}")
+    if "Как читать отчёт" not in visible_text(nodes):
+        found.append(f"{METHOD_PAGE}: нет раздела «Как читать отчёт»")
+    return found
+
+
 # ---------------------------------------------------------------------------
 # Наполнение
 # ---------------------------------------------------------------------------
@@ -285,7 +355,6 @@ class Section:
 SECTIONS = {
     "": (
         Section(".radar-grid", "витрина анализов", links=5),
-        Section("Как читать радар", "как читать радар"),
     ),
     "macro": (
         Section("#scan", "три секунды", numbers=7, charts=5),
@@ -805,6 +874,7 @@ def content_problems(base: Path, now: datetime | None = None) -> list[str]:
     """Проблемы наполнения: страница собралась, но данных на ней нет."""
     now = now or datetime.now(timezone.utc)
     found = dataset_problems(base, now)
+    found.extend(methodology_problems(base))
     for slug, relpath in PAGES.items():
         path = base / relpath
         if not path.exists():
@@ -815,6 +885,10 @@ def content_problems(base: Path, now: datetime | None = None) -> list[str]:
         if main is None:
             found.append(f"{relpath}: нет <main>, на странице только шапка и подвал")
             continue
+        if slug == "" and "Как читать радар" in visible_text(list(root.walk())):
+            found.append(
+                f"{relpath}: технический текст «Как читать радар» должен быть на отдельной странице"
+            )
         found.extend(section_problems(relpath, root, slug))
         found.extend(chart_problems(relpath, root))
         found.extend(table_problems(relpath, root))

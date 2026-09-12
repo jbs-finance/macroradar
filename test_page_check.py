@@ -4,6 +4,8 @@
 схлопнувшаяся разбивка по регионам, нерезолвленный код страны в публикации,
 протухшие или пропавшие выгрузки. Раньше всё это проезжало гейт с кодом 0 и
 сообщением «страниц проверено: 6», а пользователь видел пустые блоки.
+Методика теперь доступна отдельной страницей из футера, без технического
+блока на хабе и без плитки или вкладки.
 
 Здоровые страницы берутся из публикации public/macroradar: только там рядом с
 HTML лежат JSON-выгрузки, а фикстуры собирают голую разметку.
@@ -94,6 +96,33 @@ def test_live_pages_have_no_unknown_content_problems(live: Path):
     assert fresh(live) == []
 
 
+def test_methodology_is_a_footer_link_to_its_own_page(sandbox: Path):
+    hub = read(sandbox, "index.html")
+    assert "Как читать радар" not in hub
+    assert hub.count('href="/macroradar/methodology/"') == 1
+    assert "Методика и источники" in hub
+
+    method = read(sandbox, "methodology/index.html")
+    assert "Как читать отчёт" in method
+    assert 'href="https://jbs.finance/macroradar/methodology/"' in method
+    assert 'href="/macroradar/methodology/"' not in re.search(
+        r'<nav class="tabs".*?</nav>', method, flags=re.S
+    ).group(0)
+    assert 'class="radar-card' not in method
+    assert not fresh(sandbox)
+
+
+def test_methodology_footer_link_requires_exact_visible_label(sandbox: Path):
+    hub = read(sandbox, "index.html")
+    changed = hub.replace(
+        ">Методика и источники</a>", ">Подробнее</a>", 1
+    )
+    assert changed != hub
+    write(sandbox, "index.html", changed)
+    found = fresh(sandbox)
+    assert any("подпись ссылки на методику" in line for line in found), found
+
+
 def test_live_content_problems_are_only_the_known_data_gaps(live: Path):
     for line in content_problems(live, now=moment(live)):
         assert known(line), line
@@ -101,7 +130,7 @@ def test_live_content_problems_are_only_the_known_data_gaps(live: Path):
 
 def test_cut_main_is_caught(sandbox: Path):
     document = read(sandbox, "macro/index.html")
-    cut = re.sub(r"<main>.*</main>", "", document, flags=re.S)
+    cut = re.sub(r"<main\b[^>]*>.*?</main>", "", document, flags=re.S | re.I)
     assert cut != document
     write(sandbox, "macro/index.html", cut)
     found = fresh(sandbox)
@@ -300,7 +329,7 @@ def test_content_problems_stay_out_of_the_structural_list(sandbox: Path):
 
 def test_cli_reports_both_categories_and_fails(sandbox: Path):
     document = read(sandbox, "macro/index.html")
-    broken = re.sub(r"<main>.*</main>", "", document, flags=re.S)
+    broken = re.sub(r"<main\b[^>]*>.*?</main>", "", document, flags=re.S | re.I)
     spoiled = broken.replace('rel="canonical"', 'rel="author"')
     write(sandbox, "macro/index.html", spoiled)
     run = subprocess.run(
