@@ -17,6 +17,7 @@ REQUIRED_IDS = frozenset(
         "macroradar.tax_minfin",
         "macroradar.tax_rates",
         "macroradar.oblast_budget",
+        "macroradar.energy",
     }
 )
 FRESHNESS_STATUSES = frozenset({"proposed", "manual_review", "existing_ad_hoc"})
@@ -165,6 +166,36 @@ SOURCE_REGISTRY = (
                 "source_id": "minfin_gov_kz",
                 "canonical_url": "https://www.gov.kz/api/v1/public/content-manager/documents?activities=7294&size=2000",
                 "cadence": "monthly",
+                "freshness_status": "existing_ad_hoc",
+            },
+        ),
+    },
+    {
+        "dataset_id": "macroradar.energy",
+        "collector": "energy.py",
+        "sources": (
+            {
+                "source_id": "bns_energy_intensity",
+                "canonical_url": "https://stat.gov.kz/api/iblock/element/45233/json/file/en/",
+                "cadence": "annual",
+                "freshness_status": "existing_ad_hoc",
+            },
+            {
+                "source_id": "bns_primary_energy_consumption",
+                "canonical_url": "https://stat.gov.kz/api/iblock/element/168581/json/file/en/",
+                "cadence": "annual",
+                "freshness_status": "existing_ad_hoc",
+            },
+            {
+                "source_id": "bns_final_energy_consumption",
+                "canonical_url": "https://stat.gov.kz/api/iblock/element/45240/json/file/en/",
+                "cadence": "annual",
+                "freshness_status": "existing_ad_hoc",
+            },
+            {
+                "source_id": "bns_renewable_energy_share",
+                "canonical_url": "https://stat.gov.kz/api/iblock/element/45251/json/file/en/",
+                "cadence": "annual",
                 "freshness_status": "existing_ad_hoc",
             },
         ),

@@ -10,6 +10,7 @@ import re
 from pathlib import Path
 
 from build_budget import build as build_budget
+from build_energy import build as build_energy
 from build_macroradar import build as build_hub
 from build_national_fund import build as build_national_fund
 from build_radar import build as build_radar
@@ -19,7 +20,7 @@ from page_check import PAGES, problems
 
 HERE = Path(__file__).resolve().parent
 
-TOPICS = ("macro", "trade", "national-fund", "budget", "tax")
+TOPICS = ("macro", "trade", "national-fund", "budget", "tax", "energy")
 
 
 def data(name: str) -> dict:
@@ -41,6 +42,28 @@ def national_fund_data() -> dict:
     }
 
 
+def energy_data() -> dict:
+    rows = []
+    for index, series_id in enumerate((
+        "kz.energy.intensity",
+        "kz.energy.primary_consumption",
+        "kz.energy.final_consumption",
+        "kz.energy.renewable_share",
+    )):
+        rows.append({
+            "series_id": series_id,
+            "name_ru": f"Ряд энергии {index + 1}",
+            "unit": "%",
+            "freq": "A",
+            "source": "Бюро национальной статистики",
+            "source_url": f"https://stat.gov.kz/example/{index}",
+            "obs": [{"date": "2024", "value": 10 + index}, {"date": "2025", "value": 11 + index}],
+            "stale": False,
+            "note": "национальный разрез БНС",
+        })
+    return {"generated_at": "2026-09-13T04:00:00+00:00", "series": rows, "issues": []}
+
+
 def documents() -> dict[str, str]:
     return {
         "": build_hub(),
@@ -53,6 +76,7 @@ def documents() -> dict[str, str]:
             data("minfin.json"), data("budget.json"), data("oblast.json")
         ),
         "tax": build_tax(data("tax.json")),
+        "energy": build_energy(energy_data()),
     }
 
 
@@ -63,7 +87,7 @@ def write_pages(base: Path, pages: dict[str, str]) -> None:
         path.write_text(document, encoding="utf-8")
 
 
-def test_hub_links_to_five_topic_pages_with_own_urls():
+def test_hub_links_to_six_topic_pages_with_own_urls():
     document = documents()[""]
     assert 'rel="canonical" href="https://jbs.finance/macroradar/"' in document
     assert 'property="og:url" content="https://jbs.finance/macroradar/"' in document
@@ -116,7 +140,7 @@ def test_each_topic_page_has_own_canonical_and_single_h1():
         assert "#view-" not in document
 
 
-def test_each_topic_page_links_back_to_the_other_five():
+def test_each_topic_page_links_back_to_the_other_topics():
     pages = documents()
     for topic in TOPICS:
         document = pages[topic]

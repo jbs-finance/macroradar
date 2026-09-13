@@ -29,6 +29,9 @@ def test_fixture_build_preserves_jbs_macroradar_url_contract(tmp_path: Path):
     hub = (target / "index.html").read_text(encoding="utf-8")
     assert 'href="/macroradar/macro/"' in hub
     assert 'https://jbs.finance/macroradar/' in hub
+    assert 'href="/macroradar/energy/"' in hub
+    energy = (target / "energy/index.html").read_text(encoding="utf-8")
+    assert 'rel="canonical" href="https://jbs.finance/macroradar/energy/"' in energy
     macro = (target / "macro/index.html").read_text(encoding="utf-8")
     assert 'https://jbs.finance/ai/macroradar/' in macro
     assert verify_structure(target, SITE_URL, PUBLIC_PREFIX) == []
@@ -118,9 +121,12 @@ def test_deploy_workflow_keeps_daily_refresh_and_post_deploy_smoke():
         "Collect regional budget data",
         "Collect tax data",
         "Collect National Fund data",
+        "Collect Energy Balance data",
     ):
         assert f"name: {step}" in workflow
-    for path in ("/macroradar/", "/macroradar/macro/", "/macroradar/methodology/"):
+    assert "Reject stale Energy Balance data" in workflow
+    assert "энергетические данные не обновлены, публикация остановлена" in workflow
+    for path in ("/macroradar/", "/macroradar/macro/", "/macroradar/energy/", "/macroradar/methodology/"):
         assert f"check_page {path}" in workflow
 
 

@@ -90,6 +90,28 @@ jobs:
       - name: Collect National Fund data
         run: python national_fund.py out/national_fund.json
 
+      - name: Collect Energy Balance data
+        run: python energy.py out/energy.json
+
+      - name: Reject stale Energy Balance data
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          energy = json.loads(Path("out/energy.json").read_text(encoding="utf-8"))
+          stale = [
+              row.get("series_id", "unknown")
+              for row in energy.get("series", [])
+              if row.get("stale")
+          ]
+          if stale:
+              raise SystemExit(
+                  "энергетические данные не обновлены, публикация остановлена: "
+                  + ", ".join(stale)
+              )
+          PY
+
       - name: Test path-preserving Worker contract
         run: node --test worker/test_proxy.mjs
 
@@ -147,4 +169,5 @@ jobs:
           check_root_redirect
           check_page /macroradar/ https://jbs.finance/macroradar/
           check_page /macroradar/macro/ https://jbs.finance/macroradar/macro/
+          check_page /macroradar/energy/ https://jbs.finance/macroradar/energy/
           check_page /macroradar/methodology/ https://jbs.finance/macroradar/methodology/

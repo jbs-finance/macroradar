@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from build_budget import build as build_budget
+from build_energy import build as build_energy
 from build_macroradar import build as build_hub
 from build_national_fund import build as build_national_fund
 from build_radar import (
@@ -42,6 +43,7 @@ PAGE_PATHS = {
     "national_fund": "national-fund/index.html",
     "budget": "budget/index.html",
     "tax": "tax/index.html",
+    "energy": "energy/index.html",
     "methodology": "methodology/index.html",
 }
 INPUTS = {
@@ -53,6 +55,7 @@ INPUTS = {
     "minfin": "minfin.json",
     "oblast": "oblast.json",
     "tax": "tax.json",
+    "energy": "energy.json",
 }
 COPIES = {
     "radar": "data.json",
@@ -63,6 +66,7 @@ COPIES = {
     "tax": "tax/data.json",
     "budget": "tax/budget.json",
     "minfin": "tax/minfin.json",
+    "energy": "energy/data.json",
 }
 HEADERS = """/*
   Content-Security-Policy: default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src 'self' https://jbs.finance; font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
@@ -93,12 +97,47 @@ def fixture_national_fund() -> dict:
     }
 
 
+def fixture_energy() -> dict:
+    """Малый детерминированный аналог годовых рядов БНС для offline-сборки."""
+    series = (
+        ("kz.energy.intensity", "Энергоёмкость ВВП", "т н. э. на 1 000 USD ППС", 0.31),
+        ("kz.energy.primary_consumption", "Потребление первичной энергии", "тыс. т н. э.", 80_050.5),
+        ("kz.energy.final_consumption", "Конечное потребление энергии", "тыс. т н. э.", 55_200.25),
+        ("kz.energy.renewable_share", "Доля возобновляемых источников энергии", "%", 1.65),
+    )
+    return {
+        "generated_at": "2026-09-13T04:00:00+00:00",
+        "series": [
+            {
+                "series_id": series_id,
+                "name_ru": name_ru,
+                "unit": unit,
+                "freq": "A",
+                "source": "Бюро национальной статистики",
+                "source_url": f"https://stat.gov.kz/api/iblock/element/{index}/json/file/en/",
+                "fetched_at": "2026-09-13T04:00:00+00:00",
+                "obs": [
+                    {"date": "2024", "value": value * 0.98},
+                    {"date": "2025", "value": value},
+                ],
+                "stale": False,
+                "note": "национальный разрез БНС",
+            }
+            for index, (series_id, name_ru, unit, value) in enumerate(series, start=1)
+        ],
+        "issues": [],
+    }
+
+
 def load_inputs(data_dir: Path, fixtures: bool) -> dict[str, dict]:
     source_dir = ROOT / "fixtures" if fixtures else data_dir
     loaded = {}
     for key, filename in INPUTS.items():
         if fixtures and key == "national_fund":
             loaded[key] = fixture_national_fund()
+            continue
+        if fixtures and key == "energy":
+            loaded[key] = fixture_energy()
             continue
         path = source_dir / filename
         if not path.exists():
@@ -107,14 +146,18 @@ def load_inputs(data_dir: Path, fixtures: bool) -> dict[str, dict]:
     return loaded
 
 
-def methodology(radar: dict, pulse: dict) -> str:
+def methodology(radar: dict, pulse: dict, energy: dict) -> str:
     """Техническое приложение к рабочей странице Macro Radar.
 
     Здесь остаются динамические сведения, нужные для проверки данных, но не для
     ежедневного чтения показателей: лента изменений, ожидаемые релизы и
     построчная свежесть рядов.
     """
-    rows = sources_rows(list(pulse.get("series", [])) + list(radar.get("series", [])))
+    rows = sources_rows(
+        list(pulse.get("series", []))
+        + list(radar.get("series", []))
+        + list(energy.get("series", []))
+    )
     return f"""<!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="Методика и источники Macro Radar Казахстана">
@@ -158,7 +201,8 @@ def documents(
         "national_fund": build_national_fund(data["national_fund"]),
         "budget": build_budget(data["minfin"], data["budget"], data["oblast"]),
         "tax": build_tax(data["tax"]),
-        "methodology": methodology(data["radar"], data["pulse"]),
+        "energy": build_energy(data["energy"]),
+        "methodology": methodology(data["radar"], data["pulse"], data["energy"]),
     }
     return {
         name: standalone(document, site_url, path_prefix)

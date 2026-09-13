@@ -21,6 +21,7 @@ TABS = [
     ("fund", "Нацфонд", "/macroradar/national-fund/"),
     ("budget", "Бюджет", "/macroradar/budget/"),
     ("tax", "Ставки", "/macroradar/tax/"),
+    ("energy", "Энергия", "/macroradar/energy/"),
 ]
 
 HEADER_STYLE = """

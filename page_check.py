@@ -51,6 +51,7 @@ PAGES = {
     "national-fund": "national-fund/index.html",
     "budget": "budget/index.html",
     "tax": "tax/index.html",
+    "energy": "energy/index.html",
 }
 
 METHOD_PAGE = "methodology/index.html"
@@ -176,8 +177,8 @@ def page_problems(base: Path, slug: str) -> list[str]:
 
     if slug == "":
         cards = [n for n in nodes if n.tag == "a" and "radar-card" in n.classes]
-        if len(cards) != 5:
-            found.append(f"{relpath}: на хабе {len(cards)} карточек вместо 5")
+        if len(cards) != 6:
+            found.append(f"{relpath}: на хабе {len(cards)} карточек вместо 6")
         for card in cards:
             href = card.attrs.get("href", "")
             target_slug = next((s for s in PAGES if s and path_for(s) == href), None)
@@ -340,6 +341,7 @@ DATASETS = {
     "tax/data.json": "tax",
     "tax/budget.json": "budget",
     "tax/minfin.json": "budget",
+    "energy/data.json": "energy",
 }
 
 # Блоки, где все даты обязаны быть в прошлом. Календарь будущих релизов сюда
@@ -347,7 +349,7 @@ DATASETS = {
 PAST_SECTIONS = {"macro": ()}
 
 # Страницы, которые публикуют штамп сборки: у хаба и Нацфонда его нет.
-STAMPED = ("macro", "trade", "budget", "tax")
+STAMPED = ("macro", "trade", "budget", "tax", "energy")
 
 
 @dataclass(frozen=True)
@@ -373,7 +375,7 @@ class Section:
 
 SECTIONS = {
     "": (
-        Section(".radar-grid", "витрина анализов", links=5),
+        Section(".radar-grid", "витрина анализов", links=6),
     ),
     "macro": (
         Section("#scan", "три секунды", numbers=7, charts=5),
@@ -410,6 +412,9 @@ SECTIONS = {
         Section("#social", "зарплатные налоги", rows=3),
         Section("#special", "спецрежимы", rows=3),
         Section("Сроки и санкции", "сроки и санкции", rows=5),
+    ),
+    "energy": (
+        Section("Годовые показатели", "годовые показатели", numbers=4, charts=4),
     ),
 }
 

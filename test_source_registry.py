@@ -40,6 +40,22 @@ EXPECTED_SOURCE_URLS = {
         "macroradar.oblast_budget",
         "minfin_gov_kz",
     ): "https://www.gov.kz/api/v1/public/content-manager/documents?activities=7294&size=2000",
+    (
+        "macroradar.energy",
+        "bns_energy_intensity",
+    ): "https://stat.gov.kz/api/iblock/element/45233/json/file/en/",
+    (
+        "macroradar.energy",
+        "bns_primary_energy_consumption",
+    ): "https://stat.gov.kz/api/iblock/element/168581/json/file/en/",
+    (
+        "macroradar.energy",
+        "bns_final_energy_consumption",
+    ): "https://stat.gov.kz/api/iblock/element/45240/json/file/en/",
+    (
+        "macroradar.energy",
+        "bns_renewable_energy_share",
+    ): "https://stat.gov.kz/api/iblock/element/45251/json/file/en/",
 }
 
 
