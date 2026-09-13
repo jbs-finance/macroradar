@@ -24,6 +24,8 @@ def test_builder_has_canonical_four_series_exact_observation_and_no_script():
     assert "2025 год" in page and "11,5" in page and "тыс. т н. э." in page
     assert 'href="https://stat.gov.kz/example/0"' in page
     assert "<script" not in page.lower()
+    assert ".energy-grid > * { min-width: 0; }" in page
+    assert ".series-table caption { position: absolute;" in page
 
 
 def test_builder_makes_stale_failure_visible():
