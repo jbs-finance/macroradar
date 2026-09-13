@@ -25,6 +25,7 @@ def test_builder_has_canonical_four_series_exact_observation_and_no_script():
     assert 'href="https://stat.gov.kz/example/0"' in page
     assert "<script" not in page.lower()
     assert ".energy-grid > * { min-width: 0; }" in page
+    assert ".energy-card .series-table { min-width: 0; max-width: 100%; }" in page
     assert ".series-table caption { position: absolute;" in page
 
 

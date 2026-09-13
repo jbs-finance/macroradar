@@ -48,6 +48,7 @@ ENERGY_STYLE = """
 .energy-card .observation { margin: 0.3rem 0 0; color: var(--muted-fg); font-size: 0.875rem; }
 .energy-card .failure { margin: 0.75rem 0 0; padding: 0.55rem 0.7rem; background: var(--muted); border-left: 3px solid var(--accent); font-size: 0.8125rem; }
 .series-table { width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: 0.85rem; font-variant-numeric: tabular-nums; }
+.energy-card .series-table { min-width: 0; max-width: 100%; }
 .series-table caption { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .series-table th, .series-table td { padding: 0.5rem; border-bottom: 1px solid var(--muted); text-align: right; }
 .series-table th:first-child, .series-table td:first-child { padding-left: 0; text-align: left; }
