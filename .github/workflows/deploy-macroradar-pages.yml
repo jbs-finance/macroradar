@@ -147,11 +147,19 @@ jobs:
             local headers code
             headers="$(mktemp)"
             trap 'rm -f "$headers"' RETURN
-            code="$(curl --silent --show-error --dump-header "$headers" --output /dev/null --write-out '%{http_code}' --max-time 30 https://jbs.finance/macroradar)"
-            if [[ "$code" != "308" ]] || ! grep -Fqi '^location: https://jbs.finance/macroradar/' "$headers" || ! grep -Fqi '^x-macroradar-upstream: jbs-macroradar-pages' "$headers"; then
-              echo "Bare Macro Radar URL did not redirect through the isolated Worker" >&2
-              return 1
-            fi
+            # A freshly attached Worker route can take a few seconds to propagate to
+            # the edge, so a single attempt right after deploy is flaky. Retry like
+            # check_page does instead of failing the whole run on a race.
+            for attempt in 1 2 3 4 5 6; do
+              code="$(curl --silent --show-error --dump-header "$headers" --output /dev/null --write-out '%{http_code}' --max-time 30 https://jbs.finance/macroradar)"
+              if [[ "$code" == "308" ]] && grep -Fqi '^location: https://jbs.finance/macroradar/' "$headers" && grep -Fqi '^x-macroradar-upstream: jbs-macroradar-pages' "$headers"; then
+                return 0
+              fi
+              echo "Root redirect attempt ${attempt} failed: HTTP ${code}" >&2
+              sleep 10
+            done
+            echo "Bare Macro Radar URL did not redirect through the isolated Worker" >&2
+            return 1
           }
           check_page() {
             local path="$1"
