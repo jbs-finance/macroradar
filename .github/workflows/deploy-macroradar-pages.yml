@@ -143,16 +143,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # grep -F takes PATTERNS literally: a leading ^ is a literal caret, not an
+          # anchor, on both GNU and BSD grep. A header-presence check does not need
+          # one, the header name is already distinctive enough on its own line.
           check_root_redirect() {
             local headers code
             headers="$(mktemp)"
             trap 'rm -f "$headers"' RETURN
-            # A freshly attached Worker route can take a few seconds to propagate to
-            # the edge, so a single attempt right after deploy is flaky. Retry like
-            # check_page does instead of failing the whole run on a race.
             for attempt in 1 2 3 4 5 6; do
               code="$(curl --silent --show-error --dump-header "$headers" --output /dev/null --write-out '%{http_code}' --max-time 30 https://jbs.finance/macroradar)"
-              if [[ "$code" == "308" ]] && grep -Fqi '^location: https://jbs.finance/macroradar/' "$headers" && grep -Fqi '^x-macroradar-upstream: jbs-macroradar-pages' "$headers"; then
+              if [[ "$code" == "308" ]] && grep -Fqi 'location: https://jbs.finance/macroradar/' "$headers" && grep -Fqi 'x-macroradar-upstream: jbs-macroradar-pages' "$headers"; then
                 return 0
               fi
               echo "Root redirect attempt ${attempt} failed: HTTP ${code}" >&2
@@ -170,7 +170,7 @@ jobs:
             trap 'rm -f "$body" "$headers"' RETURN
             for attempt in 1 2 3 4 5 6; do
               code="$(curl --location --silent --show-error --dump-header "$headers" --output "$body" --write-out '%{http_code}' --max-time 30 "https://jbs.finance${path}")"
-              if [[ "$code" == "200" ]] && grep -Fq "<link rel=\"canonical\" href=\"${canonical}\">" "$body" && grep -Fq 'href="/macroradar/' "$body" && grep -Fq 'https://jbs.finance/macroradar/' "$body" && grep -Fqi '^x-macroradar-upstream: jbs-macroradar-pages' "$headers"; then
+              if [[ "$code" == "200" ]] && grep -Fq "<link rel=\"canonical\" href=\"${canonical}\">" "$body" && grep -Fq 'href="/macroradar/' "$body" && grep -Fq 'https://jbs.finance/macroradar/' "$body" && grep -Fqi 'x-macroradar-upstream: jbs-macroradar-pages' "$headers"; then
                 return 0
               fi
               echo "Smoke attempt ${attempt} failed for ${path}: HTTP ${code}" >&2
