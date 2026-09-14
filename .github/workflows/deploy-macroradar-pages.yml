@@ -28,8 +28,10 @@ jobs:
       - name: Install test dependency
         run: python -m pip install --disable-pip-version-check pytest
 
+      # test_page_check.py builds pages from the collected out/*.json, so it runs
+      # after collection. Everything else is source-independent and fails fast here.
       - name: Test generators and contracts
-        run: python -m pytest -q
+        run: python -m pytest -q --ignore=test_page_check.py
 
       # trade.py uses the prior snapshot only for the seven-day UN Comtrade
       # breakdown cache. It still refreshes data and page_check remains a hard
@@ -111,6 +113,9 @@ jobs:
                   + ", ".join(stale)
               )
           PY
+
+      - name: Test page_check against collected data
+        run: python -m pytest -q test_page_check.py
 
       - name: Test path-preserving Worker contract
         run: node --test worker/test_proxy.mjs
