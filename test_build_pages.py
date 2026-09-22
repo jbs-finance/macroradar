@@ -28,12 +28,12 @@ def test_fixture_build_preserves_jbs_macroradar_url_contract(tmp_path: Path):
         assert (target / relpath).exists(), relpath
     hub = (target / "index.html").read_text(encoding="utf-8")
     assert 'href="/macroradar/macro/"' in hub
-    assert 'https://jbs.finance/macroradar/' in hub
+    assert "https://jbs.finance/macroradar/" in hub
     assert 'href="/macroradar/energy/"' in hub
     energy = (target / "energy/index.html").read_text(encoding="utf-8")
     assert 'rel="canonical" href="https://jbs.finance/macroradar/energy/"' in energy
     macro = (target / "macro/index.html").read_text(encoding="utf-8")
-    assert 'https://jbs.finance/ai/macroradar/' in macro
+    assert "https://jbs.finance/ai/macroradar/" in macro
     assert verify_structure(target, SITE_URL, PUBLIC_PREFIX) == []
 
 
@@ -45,7 +45,7 @@ def test_fixture_build_can_use_root_urls_behind_another_domain(tmp_path: Path):
     hub = (target / "index.html").read_text(encoding="utf-8")
     assert 'href="/macro/"' in hub
     assert 'href="/macroradar/' not in hub
-    assert 'https://macroradar.jbs.finance/' in hub
+    assert "https://macroradar.jbs.finance/" in hub
     assert verify_structure(target, "https://macroradar.jbs.finance", "") == []
 
 
@@ -107,7 +107,10 @@ def test_deploy_workflow_keeps_daily_refresh_and_post_deploy_smoke():
     assert "name: Restore UN Comtrade trade snapshot" in workflow
     assert "uses: actions/cache@v4" in workflow
     assert "path: out/trade.json" in workflow
-    assert "key: macroradar-trade-${{ runner.os }}-${{ hashFiles('trade.py') }}" in workflow
+    assert (
+        "key: macroradar-trade-${{ runner.os }}-${{ hashFiles('trade.py') }}"
+        in workflow
+    )
     assert "macroradar-trade-${{ runner.os }}-" in workflow
     assert "name: Reject stale trade data restored from cache" in workflow
     assert 'if row.get("stale")' in workflow
@@ -122,11 +125,20 @@ def test_deploy_workflow_keeps_daily_refresh_and_post_deploy_smoke():
         "Collect tax data",
         "Collect National Fund data",
         "Collect Energy Balance data",
+        "Collect Industry data",
     ):
         assert f"name: {step}" in workflow
     assert "Reject stale Energy Balance data" in workflow
     assert "энергетические данные не обновлены, публикация остановлена" in workflow
-    for path in ("/macroradar/", "/macroradar/macro/", "/macroradar/energy/", "/macroradar/methodology/"):
+    assert "Reject stale Industry data" in workflow
+    assert "отраслевые данные не обновлены, публикация остановлена" in workflow
+    for path in (
+        "/macroradar/",
+        "/macroradar/macro/",
+        "/macroradar/energy/",
+        "/macroradar/industry/",
+        "/macroradar/methodology/",
+    ):
         assert f"check_page {path}" in workflow
 
 
@@ -139,7 +151,7 @@ def test_worker_only_handles_macroradar_public_prefix():
     assert 'return workerResponse("Not found", { status: 404 })' in source
     assert 'headers.delete("cookie")' in source
     assert 'headers.delete("authorization")' in source
-    assert 'jbs.finance/macroradar/*' in config
+    assert "jbs.finance/macroradar/*" in config
     assert 'jbs.finance/macroradar", zone_name' in config
     assert 'PAGES_ORIGIN = "https://jbs-macroradar.pages.dev"' in config
-    assert 'headers.set(UPSTREAM_HEADER, UPSTREAM_HEADER_VALUE)' in source
+    assert "headers.set(UPSTREAM_HEADER, UPSTREAM_HEADER_VALUE)" in source

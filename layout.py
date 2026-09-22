@@ -22,6 +22,7 @@ TABS = [
     ("budget", "Бюджет", "/macroradar/budget/"),
     ("tax", "Ставки", "/macroradar/tax/"),
     ("energy", "Энергия", "/macroradar/energy/"),
+    ("industry", "Отрасли", "/macroradar/industry/"),
 ]
 
 HEADER_STYLE = """

@@ -19,12 +19,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+import page_check
 from build_budget import build as build_budget
 from build_energy import build as build_energy
+from build_industry import build as build_industry
 from build_macroradar import build as build_hub
 from build_national_fund import build as build_national_fund
 from build_radar import (
     build as build_radar,
+)
+from build_radar import (
     calendar_markup,
     events_markup,
     reading_guidance_markup,
@@ -32,7 +36,7 @@ from build_radar import (
 )
 from build_tax import build as build_tax
 from build_trade import build as build_trade
-import page_check
+from industry import INDUSTRY_SERIES, REGIONS
 
 SITE_URL = "https://jbs.finance"
 PUBLIC_PREFIX = "/macroradar"
@@ -44,6 +48,7 @@ PAGE_PATHS = {
     "budget": "budget/index.html",
     "tax": "tax/index.html",
     "energy": "energy/index.html",
+    "industry": "industry/index.html",
     "methodology": "methodology/index.html",
 }
 INPUTS = {
@@ -56,6 +61,7 @@ INPUTS = {
     "oblast": "oblast.json",
     "tax": "tax.json",
     "energy": "energy.json",
+    "industry": "industry.json",
 }
 COPIES = {
     "radar": "data.json",
@@ -67,6 +73,7 @@ COPIES = {
     "budget": "tax/budget.json",
     "minfin": "tax/minfin.json",
     "energy": "energy/data.json",
+    "industry": "industry/data.json",
 }
 HEADERS = """/*
   Content-Security-Policy: default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src 'self' https://jbs.finance; font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
@@ -101,9 +108,24 @@ def fixture_energy() -> dict:
     """Малый детерминированный аналог годовых рядов БНС для offline-сборки."""
     series = (
         ("kz.energy.intensity", "Энергоёмкость ВВП", "т н. э. на 1 000 USD ППС", 0.31),
-        ("kz.energy.primary_consumption", "Потребление первичной энергии", "тыс. т н. э.", 80_050.5),
-        ("kz.energy.final_consumption", "Конечное потребление энергии", "тыс. т н. э.", 55_200.25),
-        ("kz.energy.renewable_share", "Доля возобновляемых источников энергии", "%", 1.65),
+        (
+            "kz.energy.primary_consumption",
+            "Потребление первичной энергии",
+            "тыс. т н. э.",
+            80_050.5,
+        ),
+        (
+            "kz.energy.final_consumption",
+            "Конечное потребление энергии",
+            "тыс. т н. э.",
+            55_200.25,
+        ),
+        (
+            "kz.energy.renewable_share",
+            "Доля возобновляемых источников энергии",
+            "%",
+            1.65,
+        ),
     )
     return {
         "generated_at": "2026-09-13T04:00:00+00:00",
@@ -129,6 +151,32 @@ def fixture_energy() -> dict:
     }
 
 
+def fixture_industry() -> dict:
+    """Малый детерминированный аналог областных рядов Talдау для offline-сборки."""
+    series = []
+    for spec in INDUSTRY_SERIES:
+        for index, (_term, _name, slug) in enumerate(REGIONS):
+            base = 100 + index
+            series.append(
+                {
+                    "series_id": f"kz.industry.{spec['series_key']}.{slug}",
+                    "name_ru": f"{spec['name_ru']}: {slug}",
+                    "unit": spec["unit"],
+                    "freq": "A",
+                    "source": "Бюро национальной статистики",
+                    "source_url": f"https://taldau.stat.gov.kz/ru/NewIndex/GetIndex/{spec['index_id']}",
+                    "fetched_at": "2026-09-22T04:00:00+00:00",
+                    "obs": [
+                        {"date": "2024", "value": base * 0.98},
+                        {"date": "2025", "value": float(base)},
+                    ],
+                    "stale": False,
+                    "note": "область, разрез Talдау",
+                }
+            )
+    return {"generated_at": "2026-09-22T04:00:00+00:00", "series": series, "issues": []}
+
+
 def load_inputs(data_dir: Path, fixtures: bool) -> dict[str, dict]:
     source_dir = ROOT / "fixtures" if fixtures else data_dir
     loaded = {}
@@ -138,6 +186,9 @@ def load_inputs(data_dir: Path, fixtures: bool) -> dict[str, dict]:
             continue
         if fixtures and key == "energy":
             loaded[key] = fixture_energy()
+            continue
+        if fixtures and key == "industry":
+            loaded[key] = fixture_industry()
             continue
         path = source_dir / filename
         if not path.exists():
@@ -178,9 +229,7 @@ def normalized_prefix(path_prefix: str) -> str:
     return "/" + path_prefix.strip("/")
 
 
-def standalone(
-    document: str, site_url: str, path_prefix: str = PUBLIC_PREFIX
-) -> str:
+def standalone(document: str, site_url: str, path_prefix: str = PUBLIC_PREFIX) -> str:
     """Переводит URL-контракт радара, не меняя физическое дерево Pages."""
     prefix = normalized_prefix(path_prefix)
     public_root = f"{site_url.rstrip('/')}{prefix}/"
@@ -202,6 +251,7 @@ def documents(
         "budget": build_budget(data["minfin"], data["budget"], data["oblast"]),
         "tax": build_tax(data["tax"]),
         "energy": build_energy(data["energy"]),
+        "industry": build_industry(data["industry"]),
         "methodology": methodology(data["radar"], data["pulse"], data["energy"]),
     }
     return {
@@ -238,7 +288,9 @@ def verify(
     old_site, old_path = page_check.SITE, page_check.BASE_PATH
     try:
         page_check.configure_urls(site_url, path_prefix or "/")
-        return page_check.problems(target) + page_check.content_problems(target, now=now)
+        return page_check.problems(target) + page_check.content_problems(
+            target, now=now
+        )
     finally:
         page_check.configure_urls(old_site, old_path)
 
@@ -259,7 +311,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=ROOT / "dist")
     parser.add_argument("--data-dir", type=Path, default=ROOT / "out")
-    parser.add_argument("--fixtures", action="store_true", help="offline fixtures из репозитория")
+    parser.add_argument(
+        "--fixtures", action="store_true", help="offline fixtures из репозитория"
+    )
     parser.add_argument("--site-url", default=SITE_URL)
     parser.add_argument(
         "--path-prefix",
@@ -280,7 +334,9 @@ def main() -> None:
             print(f" - {line}")
         raise SystemExit("Pages-сборка не прошла page_check")
     if args.fixtures:
-        print("Fixture-сборка проверена по структуре: свежесть источников не заявляется")
+        print(
+            "Fixture-сборка проверена по структуре: свежесть источников не заявляется"
+        )
     print(f"Pages-сборка готова: {args.output}")
 
 

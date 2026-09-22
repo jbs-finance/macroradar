@@ -52,6 +52,7 @@ PAGES = {
     "budget": "budget/index.html",
     "tax": "tax/index.html",
     "energy": "energy/index.html",
+    "industry": "industry/index.html",
 }
 
 METHOD_PAGE = "methodology/index.html"
@@ -177,8 +178,11 @@ def page_problems(base: Path, slug: str) -> list[str]:
 
     if slug == "":
         cards = [n for n in nodes if n.tag == "a" and "radar-card" in n.classes]
-        if len(cards) != 6:
-            found.append(f"{relpath}: на хабе {len(cards)} карточек вместо 6")
+        expected_cards = len([s for s in PAGES if s])
+        if len(cards) != expected_cards:
+            found.append(
+                f"{relpath}: на хабе {len(cards)} карточек вместо {expected_cards}"
+            )
         for card in cards:
             href = card.attrs.get("href", "")
             target_slug = next((s for s in PAGES if s and path_for(s) == href), None)
@@ -234,7 +238,9 @@ def methodology_problems(base: Path) -> list[str]:
         found.append(
             f"{PAGES['']}: методика должна быть доступна одной ссылкой из футера"
         )
-    elif re.sub(r"\s+", " ", visible_text([links[0]])).strip() != "Методика и источники":
+    elif (
+        re.sub(r"\s+", " ", visible_text([links[0]])).strip() != "Методика и источники"
+    ):
         found.append(
             f"{PAGES['']}: подпись ссылки на методику должна быть «Методика и источники»"
         )
@@ -342,6 +348,7 @@ DATASETS = {
     "tax/budget.json": "budget",
     "tax/minfin.json": "budget",
     "energy/data.json": "energy",
+    "industry/data.json": "industry",
 }
 
 # Блоки, где все даты обязаны быть в прошлом. Календарь будущих релизов сюда
@@ -349,7 +356,7 @@ DATASETS = {
 PAST_SECTIONS = {"macro": ()}
 
 # Страницы, которые публикуют штамп сборки: у хаба и Нацфонда его нет.
-STAMPED = ("macro", "trade", "budget", "tax", "energy")
+STAMPED = ("macro", "trade", "budget", "tax", "energy", "industry")
 
 
 @dataclass(frozen=True)
@@ -374,9 +381,7 @@ class Section:
 
 
 SECTIONS = {
-    "": (
-        Section(".radar-grid", "витрина анализов", links=6),
-    ),
+    "": (Section(".radar-grid", "витрина анализов", links=7),),
     "macro": (
         Section("#scan", "три секунды", numbers=7, charts=5),
         Section("#fx", "официальные курсы валют", numbers=4, charts=4),
@@ -415,6 +420,13 @@ SECTIONS = {
     ),
     "energy": (
         Section("Годовые показатели", "годовые показатели", numbers=4, charts=4),
+    ),
+    "industry": (
+        # Двадцать областей на показатель, порог с запасом вниз как у "Доходы регионов".
+        Section(
+            "Индекс производства чёрной металлургии", "металлургия по областям", rows=18
+        ),
+        Section("Число водозаборных сооружений", "водозабор по областям", rows=18),
     ),
 }
 
@@ -463,11 +475,7 @@ def region_for(root: Node, anchor: str) -> list[Node] | None:
         node = next((n for n in nodes if anchor[1:] in n.classes), None)
     else:
         node = next(
-            (
-                n
-                for n in nodes
-                if n.tag in HEADINGS and text_of(n).strip() == anchor
-            ),
+            (n for n in nodes if n.tag in HEADINGS and text_of(n).strip() == anchor),
             None,
         )
     if node is None:
@@ -623,7 +631,7 @@ def chart_problems(relpath: str, root: Node) -> list[str]:
             d = " ".join(node.attrs.get("d", "").split())
             if d in ("", "M0 0", "M 0 0"):
                 found.append(
-                    f"{relpath}: пустая линия d=\"{d}\" в графике {chart_name(node)}"
+                    f'{relpath}: пустая линия d="{d}" в графике {chart_name(node)}'
                 )
     return found
 
@@ -869,9 +877,7 @@ def claim_problems(relpath: str, root: Node, slug: str) -> list[str]:
                 )
     if len(totals) > 1:
         parts = ", ".join(f"{k} ({v})" for k, v in sorted(totals.items()))
-        found.append(
-            f"{relpath}: подписи спорят о числе регионов в стране: {parts}"
-        )
+        found.append(f"{relpath}: подписи спорят о числе регионов в стране: {parts}")
     return found
 
 
@@ -985,10 +991,9 @@ def content_problems(base: Path, now: datetime | None = None) -> list[str]:
         found.extend(cross_problems(base, relpath, root, slug))
     return found
 
+
 def main() -> None:
-    parser = ArgumentParser(
-        description="Проверяет статическую сборку Macro Radar"
-    )
+    parser = ArgumentParser(description="Проверяет статическую сборку Macro Radar")
     parser.add_argument("catalog", type=Path)
     parser.add_argument("--site-url", default=SITE)
     parser.add_argument("--base-path", default=BASE_PATH)

@@ -18,6 +18,7 @@ REQUIRED_IDS = frozenset(
         "macroradar.tax_rates",
         "macroradar.oblast_budget",
         "macroradar.energy",
+        "macroradar.industry",
     }
 )
 FRESHNESS_STATUSES = frozenset({"proposed", "manual_review", "existing_ad_hoc"})
@@ -195,6 +196,24 @@ SOURCE_REGISTRY = (
             {
                 "source_id": "bns_renewable_energy_share",
                 "canonical_url": "https://stat.gov.kz/api/iblock/element/45251/json/file/en/",
+                "cadence": "annual",
+                "freshness_status": "existing_ad_hoc",
+            },
+        ),
+    },
+    {
+        "dataset_id": "macroradar.industry",
+        "collector": "industry.py",
+        "sources": (
+            {
+                "source_id": "bns_taldau_metallurgy",
+                "canonical_url": "https://taldau.stat.gov.kz/ru/NewIndex/GetIndex/701625",
+                "cadence": "annual",
+                "freshness_status": "existing_ad_hoc",
+            },
+            {
+                "source_id": "bns_taldau_water_intake",
+                "canonical_url": "https://taldau.stat.gov.kz/ru/NewIndex/GetIndex/20385164",
                 "cadence": "annual",
                 "freshness_status": "existing_ad_hoc",
             },

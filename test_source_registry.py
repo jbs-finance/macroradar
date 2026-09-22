@@ -56,6 +56,14 @@ EXPECTED_SOURCE_URLS = {
         "macroradar.energy",
         "bns_renewable_energy_share",
     ): "https://stat.gov.kz/api/iblock/element/45251/json/file/en/",
+    (
+        "macroradar.industry",
+        "bns_taldau_metallurgy",
+    ): "https://taldau.stat.gov.kz/ru/NewIndex/GetIndex/701625",
+    (
+        "macroradar.industry",
+        "bns_taldau_water_intake",
+    ): "https://taldau.stat.gov.kz/ru/NewIndex/GetIndex/20385164",
 }
 
 
