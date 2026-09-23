@@ -1,6 +1,6 @@
 from build_health import build
 from health import HEALTH_SERIES
-from industry import REGIONS
+from regional import REGIONS
 
 
 def dataset(missing_slug: str | None = None):

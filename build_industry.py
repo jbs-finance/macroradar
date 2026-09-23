@@ -18,7 +18,8 @@ from datetime import date, datetime
 from pathlib import Path
 
 from build_pulse import STYLE
-from industry import INDUSTRY_SERIES, REGIONS
+from industry import INDUSTRY_SERIES
+from regional import REGIONS
 from layout import (
     ACCESSIBILITY_STYLE,
     CTA_STYLE,

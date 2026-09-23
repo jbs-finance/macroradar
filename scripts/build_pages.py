@@ -39,7 +39,8 @@ from build_tax import build as build_tax
 from build_trade import build as build_trade
 from health import HEALTH_SERIES
 from health import SOURCE as HEALTH_SOURCE
-from industry import INDUSTRY_SERIES, REGIONS
+from industry import INDUSTRY_SERIES
+from regional import REGIONS
 
 SITE_URL = "https://jbs.finance"
 PUBLIC_PREFIX = "/macroradar"

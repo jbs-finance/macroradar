@@ -1,5 +1,6 @@
 from build_industry import build
-from industry import INDUSTRY_SERIES, REGIONS
+from industry import INDUSTRY_SERIES
+from regional import REGIONS
 
 
 def dataset(stale_slug: str | None = None, missing_slug: str | None = None):

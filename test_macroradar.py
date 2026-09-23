@@ -19,7 +19,7 @@ from build_radar import build as build_radar
 from build_tax import build as build_tax
 from build_trade import build as build_trade
 from health import HEALTH_SERIES
-from industry import INDUSTRY_SERIES, REGIONS
+from industry import INDUSTRY_SERIES
 from page_check import PAGES, problems
 from scripts.build_pages import fixture_regional
 
@@ -85,28 +85,6 @@ def energy_data() -> dict:
     return {"generated_at": "2026-09-13T04:00:00+00:00", "series": rows, "issues": []}
 
 
-def industry_data() -> dict:
-    rows = []
-    for spec in INDUSTRY_SERIES:
-        for _term, _name, slug in REGIONS:
-            rows.append(
-                {
-                    "series_id": f"kz.industry.{spec['series_key']}.{slug}",
-                    "name_ru": f"{spec['name_ru']}: {slug}",
-                    "unit": spec["unit"],
-                    "freq": "A",
-                    "source": "Бюро национальной статистики",
-                    "source_url": f"https://taldau.stat.gov.kz/ru/NewIndex/GetIndex/{spec['index_id']}",
-                    "obs": [
-                        {"date": "2024", "value": 101.0},
-                        {"date": "2025", "value": 104.0},
-                    ],
-                    "stale": False,
-                    "note": "область, разрез Talдау",
-                }
-            )
-    return {"generated_at": "2026-09-22T04:00:00+00:00", "series": rows, "issues": []}
-
 
 def documents() -> dict[str, str]:
     return {
@@ -121,7 +99,7 @@ def documents() -> dict[str, str]:
         ),
         "tax": build_tax(data("tax.json")),
         "energy": build_energy(energy_data()),
-        "industry": build_industry(industry_data()),
+        "industry": build_industry(fixture_regional(INDUSTRY_SERIES, "kz.industry")),
         "health": build_health(fixture_regional(HEALTH_SERIES, "kz.health")),
     }
 
