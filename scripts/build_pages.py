@@ -22,6 +22,7 @@ sys.path.insert(0, str(ROOT))
 import page_check
 from build_budget import build as build_budget
 from build_energy import build as build_energy
+from build_health import build as build_health
 from build_industry import build as build_industry
 from build_macroradar import build as build_hub
 from build_national_fund import build as build_national_fund
@@ -36,6 +37,8 @@ from build_radar import (
 )
 from build_tax import build as build_tax
 from build_trade import build as build_trade
+from health import HEALTH_SERIES
+from health import SOURCE as HEALTH_SOURCE
 from industry import INDUSTRY_SERIES, REGIONS
 
 SITE_URL = "https://jbs.finance"
@@ -49,6 +52,7 @@ PAGE_PATHS = {
     "tax": "tax/index.html",
     "energy": "energy/index.html",
     "industry": "industry/index.html",
+    "health": "health/index.html",
     "methodology": "methodology/index.html",
 }
 INPUTS = {
@@ -62,6 +66,7 @@ INPUTS = {
     "tax": "tax.json",
     "energy": "energy.json",
     "industry": "industry.json",
+    "health": "health.json",
 }
 COPIES = {
     "radar": "data.json",
@@ -74,6 +79,7 @@ COPIES = {
     "minfin": "tax/minfin.json",
     "energy": "energy/data.json",
     "industry": "industry/data.json",
+    "health": "health/data.json",
 }
 HEADERS = """/*
   Content-Security-Policy: default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src 'self' https://jbs.finance; font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
@@ -151,19 +157,21 @@ def fixture_energy() -> dict:
     }
 
 
-def fixture_industry() -> dict:
+def fixture_regional(
+    specs: list[dict], prefix: str, source: str = "Бюро национальной статистики"
+) -> dict:
     """Малый детерминированный аналог областных рядов Talдау для offline-сборки."""
     series = []
-    for spec in INDUSTRY_SERIES:
+    for spec in specs:
         for index, (_term, _name, slug) in enumerate(REGIONS):
             base = 100 + index
             series.append(
                 {
-                    "series_id": f"kz.industry.{spec['series_key']}.{slug}",
+                    "series_id": f"{prefix}.{spec['series_key']}.{slug}",
                     "name_ru": f"{spec['name_ru']}: {slug}",
                     "unit": spec["unit"],
                     "freq": "A",
-                    "source": "Бюро национальной статистики",
+                    "source": source,
                     "source_url": f"https://taldau.stat.gov.kz/ru/NewIndex/GetIndex/{spec['index_id']}",
                     "fetched_at": "2026-09-22T04:00:00+00:00",
                     "obs": [
@@ -188,7 +196,10 @@ def load_inputs(data_dir: Path, fixtures: bool) -> dict[str, dict]:
             loaded[key] = fixture_energy()
             continue
         if fixtures and key == "industry":
-            loaded[key] = fixture_industry()
+            loaded[key] = fixture_regional(INDUSTRY_SERIES, "kz.industry")
+            continue
+        if fixtures and key == "health":
+            loaded[key] = fixture_regional(HEALTH_SERIES, "kz.health", HEALTH_SOURCE)
             continue
         path = source_dir / filename
         if not path.exists():
@@ -252,6 +263,7 @@ def documents(
         "tax": build_tax(data["tax"]),
         "energy": build_energy(data["energy"]),
         "industry": build_industry(data["industry"]),
+        "health": build_health(data["health"]),
         "methodology": methodology(data["radar"], data["pulse"], data["energy"]),
     }
     return {

@@ -524,6 +524,9 @@ def validate(series: Series, bounds: dict, today: date | None = None) -> list[st
             break
 
     age_days, limit = freshness(series.obs[-1].date, series.freq, today)
+    # Источник с известным лагом публикации получает свой предел явно в spec,
+    # а не расширение общего порога частоты для всех рядов.
+    limit = bounds.get("max_age_days", limit)
     if age_days > limit:
         problems.append(f"последняя точка {series.obs[-1].date} старше {limit} дней")
 

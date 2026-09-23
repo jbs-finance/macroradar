@@ -11,18 +11,30 @@ from pathlib import Path
 
 from build_budget import build as build_budget
 from build_energy import build as build_energy
+from build_health import build as build_health
 from build_industry import build as build_industry
 from build_macroradar import build as build_hub
 from build_national_fund import build as build_national_fund
 from build_radar import build as build_radar
 from build_tax import build as build_tax
 from build_trade import build as build_trade
+from health import HEALTH_SERIES
 from industry import INDUSTRY_SERIES, REGIONS
 from page_check import PAGES, problems
+from scripts.build_pages import fixture_regional
 
 HERE = Path(__file__).resolve().parent
 
-TOPICS = ("macro", "trade", "national-fund", "budget", "tax", "energy", "industry")
+TOPICS = (
+    "macro",
+    "trade",
+    "national-fund",
+    "budget",
+    "tax",
+    "energy",
+    "industry",
+    "health",
+)
 
 
 def data(name: str) -> dict:
@@ -110,6 +122,7 @@ def documents() -> dict[str, str]:
         "tax": build_tax(data("tax.json")),
         "energy": build_energy(energy_data()),
         "industry": build_industry(industry_data()),
+        "health": build_health(fixture_regional(HEALTH_SERIES, "kz.health")),
     }
 
 

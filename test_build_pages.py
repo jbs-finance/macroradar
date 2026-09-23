@@ -126,17 +126,21 @@ def test_deploy_workflow_keeps_daily_refresh_and_post_deploy_smoke():
         "Collect National Fund data",
         "Collect Energy Balance data",
         "Collect Industry data",
+        "Collect Health data",
     ):
         assert f"name: {step}" in workflow
     assert "Reject stale Energy Balance data" in workflow
     assert "энергетические данные не обновлены, публикация остановлена" in workflow
     assert "Reject stale Industry data" in workflow
     assert "отраслевые данные не обновлены, публикация остановлена" in workflow
+    assert "Reject stale Health data" in workflow
+    assert "данные здравоохранения не обновлены, публикация остановлена" in workflow
     for path in (
         "/macroradar/",
         "/macroradar/macro/",
         "/macroradar/energy/",
         "/macroradar/industry/",
+        "/macroradar/health/",
         "/macroradar/methodology/",
     ):
         assert f"check_page {path}" in workflow

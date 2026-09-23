@@ -64,6 +64,14 @@ EXPECTED_SOURCE_URLS = {
         "macroradar.industry",
         "bns_taldau_water_intake",
     ): "https://taldau.stat.gov.kz/ru/NewIndex/GetIndex/20385164",
+    (
+        "macroradar.health",
+        "bns_taldau_beds_per_10k",
+    ): "https://taldau.stat.gov.kz/ru/NewIndex/GetIndex/704311",
+    (
+        "macroradar.health",
+        "bns_taldau_doctors_per_10k",
+    ): "https://taldau.stat.gov.kz/ru/NewIndex/GetIndex/704316",
 }
 
 

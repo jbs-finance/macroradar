@@ -23,6 +23,7 @@ TABS = [
     ("tax", "Ставки", "/macroradar/tax/"),
     ("energy", "Энергия", "/macroradar/energy/"),
     ("industry", "Отрасли", "/macroradar/industry/"),
+    ("health", "Здоровье", "/macroradar/health/"),
 ]
 
 HEADER_STYLE = """
@@ -47,6 +48,8 @@ HEADER_STYLE = """
 .tabs a:hover, .tabs a:focus-visible, .tabs label:focus-visible { color: var(--fg); }
 .tabs .title { margin-inline-end: auto; padding: 0.8rem 0.75rem 0.8rem 0; font-weight: 600; color: var(--fg); font-size: 0.9375rem; white-space: nowrap; }
 [id] { scroll-margin-top: 64px; }
+/* Девять вкладок с заголовком занимают около 1080 px: ниже этой ширины активная уходит за край. */
+@media (max-width: 1100px) { .tabs .title { display: none; } }
 @media (max-width: 640px) {
   .site-bar .inner { height: auto; min-height: 52px; padding-block: 0.65rem; align-items: flex-start; }
   .site-brand { flex: 0 0 auto; }

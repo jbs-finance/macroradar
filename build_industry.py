@@ -47,13 +47,19 @@ INDUSTRY_STYLE = """
 .industry-hero { padding-block: clamp(1.5rem, 5vw, 2.5rem) 1rem; max-width: 760px; }
 .industry-hero h1 { max-width: 25ch; }
 .industry-section { margin-block: 2rem; }
-.region-table { width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: 0.85rem; font-variant-numeric: tabular-nums; }
+.region-table { width: 100%; min-width: 0; table-layout: fixed; border-collapse: collapse; margin-top: 0.85rem; font-variant-numeric: tabular-nums; }
 .region-table th, .region-table td { padding: 0.5rem; border-bottom: 1px solid var(--muted); text-align: right; }
 .region-table th:first-child, .region-table td:first-child { padding-left: 0; text-align: left; width: 40%; }
 .region-table th { color: var(--muted-fg); font-size: 0.75rem; text-transform: uppercase; letter-spacing: .05em; }
 .region-table td.gap { color: var(--muted-fg); font-style: italic; }
 .industry-source { margin: 0.75rem 0 0; font-size: 0.8125rem; overflow-wrap: anywhere; }
 .industry-source a { color: inherit; }
+@media (max-width: 640px) {
+  .region-table th, .region-table td { padding-inline: 0.3rem; font-size: 0.8125rem; }
+  .region-table th:first-child, .region-table td:first-child { width: 34%; }
+  .region-table th { letter-spacing: 0; font-size: 0.625rem; }
+  .region-table .badge { white-space: normal; }
+}
 """
 
 
@@ -91,23 +97,18 @@ def region_row(slug: str, name_ru: str, series: dict | None) -> str:
     )
 
 
-def indicator_section(spec: dict, by_id: dict[str, dict]) -> str:
+def indicator_section(
+    spec: dict, by_id: dict[str, dict], prefix: str = "kz.industry"
+) -> str:
+    ids = {slug: f"{prefix}.{spec['series_key']}.{slug}" for slug in REGION_ORDER}
     rows = "\n".join(
-        region_row(
-            slug,
-            REGIONS_BY_SLUG[slug],
-            by_id.get(f"kz.industry.{spec['series_key']}.{slug}"),
-        )
+        region_row(slug, REGIONS_BY_SLUG[slug], by_id.get(ids[slug]))
         for slug in REGION_ORDER
     )
     sample = next(
-        (
-            by_id[f"kz.industry.{spec['series_key']}.{slug}"]
-            for slug in REGION_ORDER
-            if f"kz.industry.{spec['series_key']}.{slug}" in by_id
-        ),
-        None,
+        (by_id[ids[slug]] for slug in REGION_ORDER if ids[slug] in by_id), None
     )
+    source = str((sample or {}).get("source") or "Бюро национальной статистики")
     source_url = str((sample or {}).get("source_url", ""))
     source_link = (
         f'<a href="{html.escape(source_url, quote=True)}">{html.escape(source_url)}</a>'
@@ -119,7 +120,7 @@ def indicator_section(spec: dict, by_id: dict[str, dict]) -> str:
       <table class="region-table"><caption class="sr-only">{html.escape(spec["name_ru"])} по областям</caption>
         <thead><tr><th scope="col">Область</th><th scope="col">Значение</th><th scope="col">Год</th><th scope="col">Свежесть</th></tr></thead>
         <tbody>{rows}</tbody></table>
-      <p class="industry-source">Единица: {html.escape(spec["unit"])}. Источник: Бюро национальной статистики.<br>{source_link}</p>
+      <p class="industry-source">Единица: {html.escape(spec["unit"])}. Источник: {html.escape(source)}.<br>{source_link}</p>
     </section>'''
 
 

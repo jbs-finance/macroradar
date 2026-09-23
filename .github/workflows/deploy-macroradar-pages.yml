@@ -136,6 +136,28 @@ jobs:
               )
           PY
 
+      - name: Collect Health data
+        run: python health.py out/health.json
+
+      - name: Reject stale Health data
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          health = json.loads(Path("out/health.json").read_text(encoding="utf-8"))
+          stale = [
+              row.get("series_id", "unknown")
+              for row in health.get("series", [])
+              if row.get("stale")
+          ]
+          if stale:
+              raise SystemExit(
+                  "данные здравоохранения не обновлены, публикация остановлена: "
+                  + ", ".join(stale)
+              )
+          PY
+
       - name: Test page_check against collected data
         run: python -m pytest -q test_page_check.py
 
@@ -206,4 +228,5 @@ jobs:
           check_page /macroradar/macro/ https://jbs.finance/macroradar/macro/
           check_page /macroradar/energy/ https://jbs.finance/macroradar/energy/
           check_page /macroradar/industry/ https://jbs.finance/macroradar/industry/
+          check_page /macroradar/health/ https://jbs.finance/macroradar/health/
           check_page /macroradar/methodology/ https://jbs.finance/macroradar/methodology/

@@ -53,6 +53,7 @@ PAGES = {
     "tax": "tax/index.html",
     "energy": "energy/index.html",
     "industry": "industry/index.html",
+    "health": "health/index.html",
 }
 
 METHOD_PAGE = "methodology/index.html"
@@ -349,6 +350,7 @@ DATASETS = {
     "tax/minfin.json": "budget",
     "energy/data.json": "energy",
     "industry/data.json": "industry",
+    "health/data.json": "health",
 }
 
 # Блоки, где все даты обязаны быть в прошлом. Календарь будущих релизов сюда
@@ -356,7 +358,7 @@ DATASETS = {
 PAST_SECTIONS = {"macro": ()}
 
 # Страницы, которые публикуют штамп сборки: у хаба и Нацфонда его нет.
-STAMPED = ("macro", "trade", "budget", "tax", "energy", "industry")
+STAMPED = ("macro", "trade", "budget", "tax", "energy", "industry", "health")
 
 
 @dataclass(frozen=True)
@@ -381,7 +383,9 @@ class Section:
 
 
 SECTIONS = {
-    "": (Section(".radar-grid", "витрина анализов", links=7),),
+    "": (
+        Section(".radar-grid", "витрина анализов", links=len([s for s in PAGES if s])),
+    ),
     "macro": (
         Section("#scan", "три секунды", numbers=7, charts=5),
         Section("#fx", "официальные курсы валют", numbers=4, charts=4),
@@ -427,6 +431,10 @@ SECTIONS = {
             "Индекс производства чёрной металлургии", "металлургия по областям", rows=18
         ),
         Section("Число водозаборных сооружений", "водозабор по областям", rows=18),
+    ),
+    "health": (
+        Section("Больничные койки на 10 000 населения", "койки по областям", rows=18),
+        Section("Врачи на 10 000 населения", "врачи по областям", rows=18),
     ),
 }
 

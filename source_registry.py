@@ -19,6 +19,7 @@ REQUIRED_IDS = frozenset(
         "macroradar.oblast_budget",
         "macroradar.energy",
         "macroradar.industry",
+        "macroradar.health",
     }
 )
 FRESHNESS_STATUSES = frozenset({"proposed", "manual_review", "existing_ad_hoc"})
@@ -214,6 +215,24 @@ SOURCE_REGISTRY = (
             {
                 "source_id": "bns_taldau_water_intake",
                 "canonical_url": "https://taldau.stat.gov.kz/ru/NewIndex/GetIndex/20385164",
+                "cadence": "annual",
+                "freshness_status": "existing_ad_hoc",
+            },
+        ),
+    },
+    {
+        "dataset_id": "macroradar.health",
+        "collector": "health.py",
+        "sources": (
+            {
+                "source_id": "bns_taldau_beds_per_10k",
+                "canonical_url": "https://taldau.stat.gov.kz/ru/NewIndex/GetIndex/704311",
+                "cadence": "annual",
+                "freshness_status": "existing_ad_hoc",
+            },
+            {
+                "source_id": "bns_taldau_doctors_per_10k",
+                "canonical_url": "https://taldau.stat.gov.kz/ru/NewIndex/GetIndex/704316",
                 "cadence": "annual",
                 "freshness_status": "existing_ad_hoc",
             },
