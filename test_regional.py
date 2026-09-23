@@ -127,3 +127,41 @@ def test_validate_honors_explicit_max_age():
     bounds = {"min": 0, "max": 10}
     assert any("старше" in p for p in validate(series, bounds, TODAY))
     assert validate(series, {**bounds, "max_age_days": 1200}, TODAY) == []
+
+
+def test_parse_monthly_dates_and_build_shares_one_dump_between_specs(tmp_path: Path):
+    obs = parse_periods(
+        [{"date": "31.08.2026", "value": "625435"}, {"date": "31.07.2026", "value": "x"}],
+        1,
+        "M",
+    )
+    assert [(o.date, o.value) for o in obs] == [("2026-08", 625435.0)]
+
+    places = [("741880", "Казахстан", "kz"), ("268012", "Астана", "astana")]
+    monthly = {**SPEC, "freq": "M", "period": 4, "places": places, "max": 1_000_000}
+    specs = [
+        {**monthly, "series_key": "a"},
+        {**monthly, "series_key": "b", "keep_last": 1},
+    ]
+    payload = [
+        {
+            "terms": [int(term), 741917],
+            "periods": [
+                {"date": "31.07.2026", "value": "620000"},
+                {"date": "31.08.2026", "value": "625435"},
+            ],
+        }
+        for term, _name, _slug in places
+    ]
+    urls = []
+
+    def fetcher(url, **kwargs):
+        urls.append(url)
+        return payload
+
+    data = build(specs, "kz.t", "БНС", tmp_path / "t.json", TODAY, fetcher)
+    assert urls == ["https://taldau.stat.gov.kz/ru/Api/GetIndexData/1?period=4&dics=68,776"]
+    by_id = {s["series_id"]: s for s in data["series"]}
+    assert set(by_id) == {"kz.t.a.kz", "kz.t.a.astana", "kz.t.b.kz", "kz.t.b.astana"}
+    assert len(by_id["kz.t.a.kz"]["obs"]) == 2 and len(by_id["kz.t.b.kz"]["obs"]) == 1
+    assert data["issues"] == [] and missing_series(data, specs, "kz.t") == []

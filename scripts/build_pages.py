@@ -24,6 +24,7 @@ from layout import open_sources_in_new_tab
 from build_budget import build as build_budget
 from build_energy import build as build_energy
 from build_health import build as build_health
+from build_housing import build as build_housing
 from build_industry import build as build_industry
 from build_macroradar import build as build_hub
 from build_national_fund import build as build_national_fund
@@ -40,8 +41,9 @@ from build_tax import build as build_tax
 from build_trade import build as build_trade
 from health import HEALTH_SERIES
 from health import SOURCE as HEALTH_SOURCE
+from housing import HOUSING_SERIES
 from industry import INDUSTRY_SERIES
-from regional import REGIONS
+from regional import places_of
 
 SITE_URL = "https://jbs.finance"
 PUBLIC_PREFIX = "/macroradar"
@@ -55,6 +57,7 @@ PAGE_PATHS = {
     "energy": "energy/index.html",
     "industry": "industry/index.html",
     "health": "health/index.html",
+    "housing": "housing/index.html",
     "methodology": "methodology/index.html",
 }
 INPUTS = {
@@ -69,6 +72,7 @@ INPUTS = {
     "energy": "energy.json",
     "industry": "industry.json",
     "health": "health.json",
+    "housing": "housing.json",
 }
 COPIES = {
     "radar": "data.json",
@@ -82,6 +86,7 @@ COPIES = {
     "energy": "energy/data.json",
     "industry": "industry/data.json",
     "health": "health/data.json",
+    "housing": "housing/data.json",
 }
 HEADERS = """/*
   Content-Security-Policy: default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src 'self' https://jbs.finance; font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
@@ -162,23 +167,25 @@ def fixture_energy() -> dict:
 def fixture_regional(
     specs: list[dict], prefix: str, source: str = "Бюро национальной статистики"
 ) -> dict:
-    """Малый детерминированный аналог областных рядов Talдау для offline-сборки."""
+    """Малый детерминированный аналог рядов Talдау по областям и городам для offline-сборки."""
     series = []
     for spec in specs:
-        for index, (_term, _name, slug) in enumerate(REGIONS):
+        freq = spec.get("freq", "A")
+        dates = ("2024", "2025") if freq == "A" else ("2025-08", "2026-07", "2026-08")
+        for index, (_term, _name, slug) in enumerate(places_of(spec)):
             base = 100 + index
             series.append(
                 {
                     "series_id": f"{prefix}.{spec['series_key']}.{slug}",
                     "name_ru": f"{spec['name_ru']}: {slug}",
                     "unit": spec["unit"],
-                    "freq": "A",
+                    "freq": freq,
                     "source": source,
                     "source_url": f"https://taldau.stat.gov.kz/ru/NewIndex/GetIndex/{spec['index_id']}",
                     "fetched_at": "2026-09-22T04:00:00+00:00",
                     "obs": [
-                        {"date": "2024", "value": base * 0.98},
-                        {"date": "2025", "value": float(base)},
+                        {"date": stamp, "value": base * (1 - 0.02 * (len(dates) - 1 - n))}
+                        for n, stamp in enumerate(dates)
                     ],
                     "stale": False,
                     "note": "область, разрез Talдау",
@@ -202,6 +209,9 @@ def load_inputs(data_dir: Path, fixtures: bool) -> dict[str, dict]:
             continue
         if fixtures and key == "health":
             loaded[key] = fixture_regional(HEALTH_SERIES, "kz.health", HEALTH_SOURCE)
+            continue
+        if fixtures and key == "housing":
+            loaded[key] = fixture_regional(HOUSING_SERIES, "kz.housing")
             continue
         path = source_dir / filename
         if not path.exists():
@@ -266,6 +276,7 @@ def documents(
         "energy": build_energy(data["energy"]),
         "industry": build_industry(data["industry"]),
         "health": build_health(data["health"]),
+        "housing": build_housing(data["housing"]),
         "methodology": methodology(data["radar"], data["pulse"], data["energy"]),
     }
     return {

@@ -72,6 +72,18 @@ EXPECTED_SOURCE_URLS = {
         "macroradar.health",
         "bns_taldau_doctors_per_10k",
     ): "https://taldau.stat.gov.kz/ru/NewIndex/GetIndex/704316",
+    (
+        "macroradar.housing",
+        "bns_taldau_housing_price_m2",
+    ): "https://taldau.stat.gov.kz/ru/NewIndex/GetIndex/703116",
+    (
+        "macroradar.housing",
+        "bns_taldau_housing_price_index",
+    ): "https://taldau.stat.gov.kz/ru/NewIndex/GetIndex/703083",
+    (
+        "macroradar.housing",
+        "bns_taldau_housing_commissioned",
+    ): "https://taldau.stat.gov.kz/ru/NewIndex/GetIndex/701960",
 }
 
 

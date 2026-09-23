@@ -45,7 +45,7 @@ body { margin: 0; background: var(--bg); color: var(--fg);
 .radar-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: .875rem; padding-bottom: clamp(2rem, 4vw, 3rem); }
 .radar-card { grid-column: span 4; min-height: 190px; display: flex; flex-direction: column; justify-content: space-between; padding: clamp(1.25rem, 3vw, 2rem); background: var(--card); color: var(--fg); text-decoration: none; border: 1px solid var(--muted); border-top: 3px solid var(--card-tone, var(--accent)); border-radius: var(--radius); transition: transform var(--dur-in) var(--ease-out), box-shadow var(--dur-in) var(--ease-out); }
 .radar-card:hover, .radar-card:focus-visible { transform: translateY(-4px); box-shadow: 0 14px 26px rgba(44, 36, 32, .11); outline: none; }
-.radar-card--macro { --card-tone: #A8522F; } .radar-card--trade { --card-tone: #2F6B4F; } .radar-card--fund { --card-tone: #2F6B4F; } .radar-card--budget { --card-tone: #8A6A2C; } .radar-card--tax { --card-tone: #755C8C; } .radar-card--energy { --card-tone: #3D718C; } .radar-card--industry { --card-tone: #5C7A3D; } .radar-card--health { --card-tone: #9A4A5E; }
+.radar-card--macro { --card-tone: #A8522F; } .radar-card--trade { --card-tone: #2F6B4F; } .radar-card--fund { --card-tone: #2F6B4F; } .radar-card--budget { --card-tone: #8A6A2C; } .radar-card--tax { --card-tone: #755C8C; } .radar-card--energy { --card-tone: #3D718C; } .radar-card--industry { --card-tone: #5C7A3D; } .radar-card--health { --card-tone: #9A4A5E; } .radar-card--housing { --card-tone: #B0683A; }
 .card-kicker { margin: 0; color: var(--card-tone); font-size: .75rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
 .radar-card h2 { margin: .3rem 0 .5rem; font-family: Georgia, "Times New Roman", serif; font-size: clamp(1.35rem, 2vw, 1.7rem); letter-spacing: -.02em; line-height: 1.1; }
 .radar-card p { max-width: 38ch; margin: 0; color: var(--muted-fg); font-size: .95rem; }
@@ -105,6 +105,12 @@ SECTIONS = (
         "Здоровье",
         "Койки и врачи по областям",
         "Больничные койки и врачи на 10 000 населения по двадцати областям, данные Минздрава в БНС.",
+    ),
+    (
+        "housing",
+        "Жильё",
+        "Цена квадратного метра и аренда",
+        "Новые и вторичные квартиры, аренда по двадцати городам и ввод жилья по регионам, каждый месяц по данным БНС.",
     ),
 )
 
@@ -166,7 +172,7 @@ TEMPLATE = """<!doctype html>
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'none'; img-src 'self' https://jbs.finance; font-src 'self'; base-uri 'none'; form-action 'none'">
 {meta}<title>Macro Radar Казахстана</title><style>{style}</style></head><body>
 {header}<div class="wrap"><main>
-<header id="overview" class="radar-hero"><p class="eyebrow">JB Solutions</p><h1>Macro Radar Казахстана</h1><p class="lede">Восемь срезов экономики Казахстана: макроусловия, внешняя торговля, Нацфонд, бюджет, налоговые ставки, энергетический баланс, отраслевые показатели и здравоохранение по областям. У каждого своя страница с датой сверки и первоисточником.</p></header>
+<header id="overview" class="radar-hero"><p class="eyebrow">JB Solutions</p><h1>Macro Radar Казахстана</h1><p class="lede">Девять срезов экономики Казахстана: макроусловия, внешняя торговля, Нацфонд, бюджет, налоговые ставки, энергетический баланс, отраслевые показатели, здравоохранение по областям и рынок жилья. У каждого своя страница с датой сверки и первоисточником.</p></header>
 <p class="reading-note">Выбери срез карточкой ниже или ссылкой в шапке. У каждого показателя указаны дата и первоисточник. Это ориентир для анализа, персональной инвестиционной или налоговой рекомендацией он не является.</p>
 <section class="radar-grid" aria-label="Анализы Macro Radar">
 {cards}

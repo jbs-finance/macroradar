@@ -1,4 +1,4 @@
-"""Областные ряды БНС из Talдау: общий сбор для industry.py и health.py.
+"""Ряды БНС из Talдау по областям и городам: общий сбор для industry, health, housing.
 
 Правила, найденные discovery-прогонами 21-23.09.2026:
 
@@ -67,7 +67,8 @@ GAP_VALUES = (None, "", "-", "x")
 
 
 def dump_url(spec: dict) -> str:
-    return f"{TALDAU_HOST}/ru/Api/GetIndexData/{spec['index_id']}?period=7&dics={spec['dics']}"
+    period = spec.get("period", 7)  # 7 год, 4 месяц, 8 месяц с накоплением
+    return f"{TALDAU_HOST}/ru/Api/GetIndexData/{spec['index_id']}?period={period}&dics={spec['dics']}"
 
 
 def page_url(spec: dict) -> str:
@@ -93,20 +94,27 @@ def pick_rows(payload: Any, spec: dict) -> tuple[dict[str, list[dict]], set[str]
     return rows, ambiguous
 
 
-def parse_periods(periods: list[dict], index_id: int) -> list[Obs]:
+def parse_periods(periods: list[dict], index_id: int, freq: str = "A") -> list[Obs]:
+    """Дата Talдау это последний день периода, «31.08.2026»: год даёт «2026», месяц «2026-08»."""
     obs: list[Obs] = []
     for period in periods:
         raw_date, raw = period.get("date"), period.get("value")
         if raw in GAP_VALUES:
             continue
-        if not isinstance(raw_date, str) or not raw_date.startswith("31.12."):
+        parts = raw_date.split(".") if isinstance(raw_date, str) else []
+        if len(parts) != 3 or (freq == "A" and parts[:2] != ["31", "12"]):
             raise SourceError(f"{index_id}: неожиданная дата {raw_date!r}")
+        stamp = parts[2] if freq == "A" else f"{parts[2]}-{parts[1]}"
         try:
-            obs.append(Obs(date=raw_date[-4:], value=float(str(raw).replace(",", "."))))
+            obs.append(Obs(date=stamp, value=float(str(raw).replace(",", "."))))
         except ValueError as exc:
             raise SourceError(f"{index_id}: некорректное значение {raw!r}") from exc
     obs.sort(key=lambda item: item.date)
     return obs
+
+
+def places_of(spec: dict) -> list[tuple[str, str, str]]:
+    return spec.get("places", REGIONS)
 
 
 def build(
@@ -117,11 +125,13 @@ def build(
     today: date | None = None,
     fetcher: Callable[..., Any] = fetch_json,
 ) -> dict[str, Any]:
-    """20 областей на каждый показатель. Сбой показателя или одной области
-    оставляет прошлый валидный срез только для неё, остальные собираются."""
+    """Каждый показатель по своим местам (по умолчанию 20 областей). Сбой показателя
+    или одного места оставляет прошлый валидный срез только для него."""
     previous = load_previous(dataset)
     result: list[dict[str, Any]] = []
     issues: list[str] = []
+    # Несколько спецификаций читают один дамп (индекс цен на жильё 7 МБ): качаем один раз.
+    dumps: dict[str, Any] = {}
 
     def fallback(series_id: str, reason: str) -> None:
         issues.append(f"{series_id}: {reason}")
@@ -130,35 +140,41 @@ def build(
             result.append({**old, "stale": True, "note": reason})
 
     for spec in specs:
+        url = dump_url(spec)
         try:
-            payload = fetcher(
-                dump_url(spec),
-                raw_name=f"{prefix}_{spec['series_key']}.json",
-                headers=TALDAU_HEADERS,
-                max_body=spec.get("max_body", MAX_BODY),
-            )
-            rows, ambiguous = pick_rows(payload, spec)
+            if url not in dumps:
+                dumps[url] = fetcher(
+                    url,
+                    raw_name=f"{prefix}_{spec['series_key']}.json",
+                    headers=TALDAU_HEADERS,
+                    max_body=spec.get("max_body", MAX_BODY),
+                )
+            rows, ambiguous = pick_rows(dumps[url], spec)
         except SourceError as exc:
-            for _term, _name, slug in REGIONS:
+            for _term, _name, slug in places_of(spec):
                 fallback(f"{prefix}.{spec['series_key']}.{slug}", str(exc))
             continue
-        for term, _name, slug in REGIONS:
+        freq = spec.get("freq", "A")
+        for term, _name, slug in places_of(spec):
             series_id = f"{prefix}.{spec['series_key']}.{slug}"
             try:
                 if term in ambiguous:
-                    raise SourceError("регион встречается в ответе дважды")
+                    raise SourceError("место встречается в ответе дважды")
                 if term not in rows:
-                    raise SourceError("регион не найден в ответе")
+                    raise SourceError("место не найдено в ответе")
+                obs = parse_periods(rows[term], spec["index_id"], freq)
+                if spec.get("keep_last"):
+                    obs = obs[-spec["keep_last"]:]
                 series = Series(
                     series_id=series_id,
                     name_ru=f"{spec['name_ru']}: {slug}",
                     unit=spec["unit"],
-                    freq="A",
+                    freq=freq,
                     source=source,
                     source_url=page_url(spec),
                     fetched_at=_now(),
-                    obs=parse_periods(rows[term], spec["index_id"]),
-                    note="область, разрез Talдау",
+                    obs=obs,
+                    note="разрез Talдау",
                 )
                 problems = validate(series, spec, today)
                 if problems:
@@ -179,7 +195,7 @@ def missing_series(
 ) -> list[str]:
     """Ряды, пропавшие сверх известных структурных дыр источника."""
     expected = {
-        f"{prefix}.{s['series_key']}.{slug}" for s in specs for _, _, slug in REGIONS
+        f"{prefix}.{s['series_key']}.{slug}" for s in specs for _, _, slug in places_of(s)
     }
     got = {item["series_id"] for item in data["series"]}
     return sorted(expected - got - known_gaps)

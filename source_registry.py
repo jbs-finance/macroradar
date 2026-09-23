@@ -20,6 +20,7 @@ REQUIRED_IDS = frozenset(
         "macroradar.energy",
         "macroradar.industry",
         "macroradar.health",
+        "macroradar.housing",
     }
 )
 FRESHNESS_STATUSES = frozenset({"proposed", "manual_review", "existing_ad_hoc"})
@@ -234,6 +235,30 @@ SOURCE_REGISTRY = (
                 "source_id": "bns_taldau_doctors_per_10k",
                 "canonical_url": "https://taldau.stat.gov.kz/ru/NewIndex/GetIndex/704316",
                 "cadence": "annual",
+                "freshness_status": "existing_ad_hoc",
+            },
+        ),
+    },
+    {
+        "dataset_id": "macroradar.housing",
+        "collector": "housing.py",
+        "sources": (
+            {
+                "source_id": "bns_taldau_housing_price_m2",
+                "canonical_url": "https://taldau.stat.gov.kz/ru/NewIndex/GetIndex/703116",
+                "cadence": "monthly",
+                "freshness_status": "existing_ad_hoc",
+            },
+            {
+                "source_id": "bns_taldau_housing_price_index",
+                "canonical_url": "https://taldau.stat.gov.kz/ru/NewIndex/GetIndex/703083",
+                "cadence": "monthly",
+                "freshness_status": "existing_ad_hoc",
+            },
+            {
+                "source_id": "bns_taldau_housing_commissioned",
+                "canonical_url": "https://taldau.stat.gov.kz/ru/NewIndex/GetIndex/701960",
+                "cadence": "monthly",
                 "freshness_status": "existing_ad_hoc",
             },
         ),

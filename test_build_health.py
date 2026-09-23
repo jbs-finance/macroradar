@@ -36,8 +36,8 @@ def test_table_and_tabs_fit_narrow_screens():
     page = build(dataset())
     # Общее правило table { min-width: 640px } давало горизонтальную прокрутку на телефоне.
     assert ".region-table { width: 100%; min-width: 0;" in page
-    # Девять вкладок с заголовком не влезают на 1024 px, активная уходила за край.
-    assert "@media (max-width: 1100px) { .tabs .title { display: none; } }" in page
+    # Десять вкладок с заголовком не влезают на 1024 px, активная уходила за край.
+    assert "@media (max-width: 1180px) { .tabs .title { display: none; } }" in page
 
 
 def test_old_observation_is_marked_outdated_and_missing_region_is_named():

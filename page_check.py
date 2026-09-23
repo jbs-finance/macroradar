@@ -54,6 +54,7 @@ PAGES = {
     "energy": "energy/index.html",
     "industry": "industry/index.html",
     "health": "health/index.html",
+    "housing": "housing/index.html",
 }
 
 METHOD_PAGE = "methodology/index.html"
@@ -351,6 +352,7 @@ DATASETS = {
     "energy/data.json": "energy",
     "industry/data.json": "industry",
     "health/data.json": "health",
+    "housing/data.json": "housing",
 }
 
 # Блоки, где все даты обязаны быть в прошлом. Календарь будущих релизов сюда
@@ -358,7 +360,7 @@ DATASETS = {
 PAST_SECTIONS = {"macro": ()}
 
 # Страницы, которые публикуют штамп сборки: у хаба и Нацфонда его нет.
-STAMPED = ("macro", "trade", "budget", "tax", "energy", "industry", "health")
+STAMPED = ("macro", "trade", "budget", "tax", "energy", "industry", "health", "housing")
 
 
 @dataclass(frozen=True)
@@ -435,6 +437,11 @@ SECTIONS = {
     "health": (
         Section("Больничные койки на 10 000 населения", "койки по областям", rows=18),
         Section("Врачи на 10 000 населения", "врачи по областям", rows=18),
+    ),
+    "housing": (
+        Section("#housing-summary", "цены по стране", numbers=3, charts=3),
+        Section("Цены по городам", "цены по городам", rows=18),
+        Section("Ввод жилья по регионам", "ввод по регионам", rows=18),
     ),
 }
 
