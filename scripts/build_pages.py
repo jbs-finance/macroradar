@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 import page_check
+from layout import open_sources_in_new_tab
 from build_budget import build as build_budget
 from build_energy import build as build_energy
 from build_health import build as build_health
@@ -268,7 +269,7 @@ def documents(
         "methodology": methodology(data["radar"], data["pulse"], data["energy"]),
     }
     return {
-        name: standalone(document, site_url, path_prefix)
+        name: open_sources_in_new_tab(standalone(document, site_url, path_prefix))
         for name, document in raw.items()
     }
 

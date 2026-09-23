@@ -159,3 +159,28 @@ def test_worker_only_handles_macroradar_public_prefix():
     assert 'jbs.finance/macroradar", zone_name' in config
     assert 'PAGES_ORIGIN = "https://jbs-macroradar.pages.dev"' in config
     assert "headers.set(UPSTREAM_HEADER, UPSTREAM_HEADER_VALUE)" in source
+
+
+def test_external_source_links_open_in_new_tab_and_warn_screen_readers(tmp_path: Path):
+    import re
+
+    from layout import open_sources_in_new_tab
+
+    data = load_inputs(Path("unused"), fixtures=True)
+    target = tmp_path / "dist"
+    write_tree(target, data, SITE_URL)
+    external = 0
+    for page in target.rglob("*.html"):
+        document = page.read_text(encoding="utf-8")
+        assert open_sources_in_new_tab(document) == document, page
+        for tag, body in re.findall(r"(<a\b[^>]*>)(.*?)</a>", document, flags=re.S):
+            href = re.search(r'href="([^"]*)"', tag).group(1)
+            outside = href.startswith("http") and not re.match(r"https?://([\w-]+\.)*jbs\.finance[/]", href)
+            if outside:
+                external += 1
+                assert 'target="_blank"' in tag and 'rel="noopener noreferrer"' in tag, tag
+                assert tag.count("rel=") == 1, tag
+                assert "откроется в новой вкладке" in body, tag
+            else:
+                assert "target=" not in tag, tag
+    assert external >= 5

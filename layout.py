@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import html
 import json
+import re
 from calendar import monthrange
 from datetime import date
 
@@ -68,7 +69,31 @@ ACCESSIBILITY_STYLE = """
   font-weight: 600; text-decoration: none; transition: transform var(--dur-in) var(--ease-out); }
 .skip-link:focus-visible { transform: translate(-50%, 0); outline: 3px solid #A8522F; outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .skip-link { transition: none; } }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 """
+
+# Инлайн, а не класс: у страницы методики свой набор стилей без .sr-only.
+_SR_ONLY_INLINE = (
+    "position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;"
+    "clip:rect(0,0,0,0);white-space:nowrap;border:0"
+)
+_EXTERNAL_LINK = re.compile(
+    r'<a\b(?![^>]*\btarget=)([^>]*\bhref="https?://(?!(?:[\w-]+\.)*jbs\.finance[/"])[^"]*"[^>]*)>(.*?)</a>',
+    re.DOTALL,
+)
+
+
+def open_sources_in_new_tab(document: str) -> str:
+    """Ссылки на внешние источники открываются в новой вкладке, диктор об этом предупреждён.
+
+    Ссылки на сам jbs.finance и относительные адреса не трогаются."""
+
+    def patch(m: re.Match) -> str:
+        attrs = re.sub(r'\s+rel="[^"]*"', "", m.group(1))
+        hint = f'<span style="{_SR_ONLY_INLINE}"> (откроется в новой вкладке)</span>'
+        return f'<a{attrs} target="_blank" rel="noopener noreferrer">{m.group(2)}{hint}</a>'
+
+    return _EXTERNAL_LINK.sub(patch, document)
 
 
 def skip_link() -> str:
