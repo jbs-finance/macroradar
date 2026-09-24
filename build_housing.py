@@ -295,9 +295,18 @@ def deals_section(deals: dict | None) -> str:
     </section>"""
 
 
+def offer_rows(rows: list[dict]) -> str:
+    return "".join(
+        f"<tr><td>{html.escape(r['city'])}</td><td>{r['rooms']}</td>"
+        f"<td>{fmt_num(r['listings_on_site'], 0) if r.get('listings_on_site') else 'н/д'}</td>"
+        f"<td>{money(r['median'])}</td><td>{money(r['q1'])} … {money(r['q3'])}</td></tr>"
+        for r in rows
+    )
+
+
 def listings_section(by_id: dict, listings: dict | None) -> str:
     """Цены предложения площадок рядом с ценой БНС. Отдельный тип доверия, свои подписи."""
-    if not listings or not (listings.get("kn") or listings.get("korter")):
+    if not listings or not (listings.get("kn") or listings.get("avi") or listings.get("korter")):
         return f"""    <section class="housing-section" id="housing-listings" aria-labelledby="listings-title">
       <h2 id="listings-title">Цены предложения на площадках</h2>
 {no_data("площадки объявлений не ответили при последнем сборе")}
@@ -315,12 +324,7 @@ def listings_section(by_id: dict, listings: dict | None) -> str:
     ]
     kn = listings.get("kn") or []
     if kn:
-        rows = "".join(
-            f"<tr><td>{html.escape(r['city'])}</td><td>{r['rooms']}</td>"
-            f"<td>{fmt_num(r['listings_on_site'], 0) if r.get('listings_on_site') else 'н/д'}</td>"
-            f"<td>{money(r['median'])}</td><td>{money(r['q1'])} … {money(r['q3'])}</td></tr>"
-            for r in kn
-        )
+        rows = offer_rows(kn)
         compare = []
         for city in dict.fromkeys(r["city"] for r in kn):
             points = bns.get(slug_of.get(city, ""), {})
@@ -336,6 +340,13 @@ def listings_section(by_id: dict, listings: dict | None) -> str:
         <tbody>{rows}</tbody></table></div>
       <p class="housing-note">Медиана и квартили цены за м² по свежим объявлениям, до {max(r["sample"] for r in kn)} в строке: новые и вторичные квартиры вместе, как их выставляет площадка.</p>
       {compare_note}""")
+    avi = listings.get("avi") or []
+    if avi:
+        parts.append(f"""      <h3>Квартиры в продаже на avi.kz</h3>
+      <div class="table-wrap"><table class="city-table"><caption class="sr-only">Цены предложения avi.kz по комнатности</caption>
+        <thead><tr><th scope="col">Город</th><th scope="col">комнат</th><th scope="col">объявлений</th><th scope="col">медиана, ₸/м²</th><th scope="col">половина цен в диапазоне</th></tr></thead>
+        <tbody>{offer_rows(avi)}</tbody></table></div>
+      <p class="housing-note">Доска объявлений общего профиля, квартир на ней мало: в расчёт идут все объявления раздела, строки с выборкой меньше 10 не показываются.</p>""")
     korter = listings.get("korter") or []
     rows = []
     for r in korter:
@@ -353,7 +364,7 @@ def listings_section(by_id: dict, listings: dict | None) -> str:
         <thead><tr><th scope="col">Город</th><th scope="col">korter, ₸/м²</th><th scope="col">БНС новые, ₸/м²</th><th scope="col">разница</th></tr></thead>
         <tbody>{"".join(r[1] for r in rows)}</tbody></table></div>
       <p class="housing-note">Средняя цена м² жилых комплексов на korter.kz, методику площадка не раскрывает. БНС за последний опубликованный месяц. Разница рассчитана JB Solutions.</p>""")
-    parts.append(f"""      <p class="housing-source">Источники: <a href="https://www.kn.kz/">kn.kz</a>, <a href="https://korter.kz/">korter.kz</a>. Сбор раз в сутки с паузой между запросами, без персональных данных продавцов.</p>
+    parts.append(f"""      <p class="housing-source">Источники: <a href="https://www.kn.kz/">kn.kz</a>, <a href="https://avi.kz/">avi.kz</a>, <a href="https://korter.kz/">korter.kz</a>. Сбор раз в сутки с паузой между запросами, без персональных данных продавцов.</p>
     </section>""")
     return "\n".join(parts)
 

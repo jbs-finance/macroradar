@@ -1,4 +1,4 @@
-"""Цены предложения на площадках объявлений: kn.kz (продажа квартир) и korter.kz (новостройки).
+"""Цены предложения на площадках объявлений: kn.kz и avi.kz (продажа квартир), korter.kz (новостройки).
 
 Дополнение к статистике БНС на странице жилья, отдельный тип доверия: это цены
 предложения, не сделок и не выборочного наблюдения. Разбор перенесён из
@@ -9,7 +9,9 @@ github.com/jbs-finance/realty-mcp (разведка 23-24.09.2026):
    сайт игнорирует. robots: Crawl-delay 2, поэтому пауза между запросами 3 секунды.
 2. korter.kz: window.INITIAL_STATE, средняя цена м² новостроек по другим городам
    (secondaryGeoObjects). Со страниц Алматы и Астаны вместе выходит около 20 городов.
-3. krisha.kz не используется: п.5.3 соглашения запрещает автосбор без разрешения Kolesa.
+3. avi.kz: серверный HTML, 60 карточек на страницу, комнаты и площадь в заголовке.
+4. Не используются, в условиях прямой запрет автосбора без письменного разрешения:
+   krisha.kz (п.5.3, Kolesa), nedvizhka.kz (п.4.2 условий D&D Group), flagma.kz.
 
 Сбой площадки не останавливает публикацию: пишется в issues, секция показывает
 «нет данных». Персональные данные продавцов не извлекаются.
@@ -46,6 +48,14 @@ KN_ROOMS = {
     4: "chetyrehkomnatnyh",
 }
 KORTER_PAGES = [("Алматы", "/новостройки-алматы"), ("Астана", "/новостройки-астаны")]
+# avi.kz: доска объявлений, квартир мало (24.09.2026: 80 в Алматы, 11 в Астане; каждая карточка
+# стоит на странице дважды, для десктопа и телефона, поэтому счёт по уникальным id), поэтому
+# берутся все страницы раздела, а комнаты группируются по заголовку. Соглашение
+# (avi.kz/agreement.html) автосбор не запрещает, в robots закрыт только кабинет.
+AVI = "https://avi.kz"
+AVI_CITIES = [("Алматы", "almaty"), ("Астана", "astana")]
+AVI_MAX_PAGES = 10
+MIN_SAMPLE = 10
 
 
 def _num(s: str) -> float | None:
@@ -141,6 +151,48 @@ def collect_kn(get: Callable[[str, str], str], issues: list[str]) -> list[dict]:
     return rows
 
 
+def parse_avi_page(page: str) -> list[dict]:
+    """Карточки раздела «Продажа квартир»: id, комнаты и площадь из заголовка, цена в тенге."""
+    cards = []
+    for block in page.split('class="sr-2-list-item-n"')[1:]:
+        def field(cls: str) -> str:
+            m = re.search(rf'class="{cls}"[^>]*>(.*?)</(?:div|a|span)>', block, re.DOTALL)
+            return html.unescape(re.sub(r"<[^>]+>|\s+", " ", m[1])).strip() if m else ""
+
+        ad = re.search(r'href="https://avi\.kz/[a-z-]+/[a-z0-9-]+-(\d+)\.html"', block)
+        title, price = field("sr-2-list-item-n-title"), field("sr-2-list-item-n-price")
+        rooms = re.match(r"(\d+)[\s-]*комн", title)
+        area = re.search(r"(\d[\d.,]*)\s*(?:м|кв)", title)
+        cost = re.match(r"([\d ]+)\s*тг", price)
+        if ad and rooms and area and cost and _num(area[1]):
+            cards.append({"id": ad[1], "rooms": int(rooms[1]), "price_m2": _num(cost[1]) / _num(area[1])})
+    return cards
+
+
+def collect_avi(get: Callable[[str, str], str], issues: list[str]) -> list[dict]:
+    rows = []
+    for city, slug in AVI_CITIES:
+        url = f"{AVI}/{slug}/nedvizhimost/prodazha-nedvizhimosti/prodazha-kvartir/"
+        cards: dict[str, dict] = {}
+        try:
+            for page in range(1, AVI_MAX_PAGES + 1):
+                batch = parse_avi_page(get(url + (f"?page={page}" if page > 1 else ""), f"avi_{slug}_{page}.html"))
+                fresh = [c for c in batch if c["id"] not in cards]
+                # За последней страницей сайт снова отдаёт последнюю: новых id нет, листать дальше незачем.
+                if not fresh:
+                    break
+                cards.update((c["id"], c) for c in fresh)
+        except SourceError as exc:
+            issues.append(f"avi.kz {city}: {exc}")
+            continue
+        for rooms in (1, 2, 3, 4):
+            prices = [c["price_m2"] for c in cards.values() if c["rooms"] == rooms]
+            stats = quartiles(prices) if len(prices) >= MIN_SAMPLE else None
+            if stats:
+                rows.append({"city": city, "rooms": rooms, "listings_on_site": len(prices), "sample": len(prices), "url": url, **stats})
+    return rows
+
+
 def collect_korter(get: Callable[[str, str], str], issues: list[str]) -> list[dict]:
     cities: dict[str, float] = {}
     for own, path in KORTER_PAGES:
@@ -183,6 +235,7 @@ def build(
     return {
         "generated_at": (now or datetime.now(UTC)).isoformat(timespec="seconds"),
         "kn": collect_kn(get, issues),
+        "avi": collect_avi(get, issues),
         "korter": collect_korter(get, issues),
         "issues": issues,
     }

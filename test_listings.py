@@ -143,3 +143,42 @@ def test_page_section_compares_with_bns_and_labels_trust():
 def test_page_without_listings_says_no_data():
     page = build(dataset(), None)
     assert "площадки объявлений не ответили" in page
+
+
+def avi_page(cards: list[tuple[str, str, str]]) -> str:
+    """Синтетические карточки по вёрстке avi.kz 24.09.2026: (id, заголовок, цена)."""
+    return "".join(
+        f'<div class="sr-2-list-item-n"><a href="https://avi.kz/almaty/prodazha-kvartiry-{ad}.html">x</a>'
+        f'<div class="sr-2-list-item-n-cat-box">Вторичный рынок</div>'
+        f'<div class="sr-2-list-item-n-title">{title}</div><div class="sr-2-list-item-n-price">{price}</div></div>'
+        for ad, title, price in cards
+    )
+
+
+def test_avi_parse_reads_rooms_and_area_from_title():
+    page = avi_page(
+        [
+            ("1", "2 комнатная квартира, 50 м<sup>2</sup>", "55 000 000 тг"),
+            ("2", "3-комн. квартира, 58.2 кв.м", "43 500 000 тг"),
+            ("3", "Квартира без комнат в заголовке", "10 000 000 тг"),
+        ]
+    )
+    cards = listings.parse_avi_page(page)
+    assert [(c["id"], c["rooms"], round(c["price_m2"])) for c in cards] == [
+        ("1", 2, 1100000),
+        ("2", 3, 747423),
+    ]
+
+
+def test_avi_stops_when_site_repeats_last_page(monkeypatch):
+    first = avi_page([(str(i), "2 комнатная квартира, 50 м", f"{30 + i} 000 000 тг") for i in range(12)])
+    calls = []
+
+    def get(url, raw_name):
+        calls.append(url)
+        # Любая страница после первой повторяет её: так сайт отвечает за последней страницей.
+        return first
+
+    rows = listings.collect_avi(get, [])
+    assert sum("almaty" in u for u in calls) == 2
+    assert rows[0]["city"] == "Алматы" and rows[0]["rooms"] == 2 and rows[0]["sample"] == 12
