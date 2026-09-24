@@ -39,6 +39,7 @@ HERE = Path(__file__).resolve().parent
 DATASET = HERE / "out" / "housing.json"
 DEFAULT_OUT = HERE / "out" / "housing.html"
 LISTINGS = HERE / "out" / "listings.json"
+DEALS = HERE / "out" / "deals.json"
 
 # Подлежащее и глагол для заголовка по сегменту рынка.
 HEADLINE_SUBJECT = {
@@ -248,6 +249,52 @@ def built_section(by_id: dict) -> str:
     </section>"""
 
 
+def deals_section(deals: dict | None) -> str:
+    """Число сделок купли-продажи из ежемесячных релизов БНС. Изменения считаются здесь, подписаны как расчёт."""
+    obs = (deals or {}).get("obs") or []
+    if not obs:
+        return f"""    <section class="housing-section" id="housing-deals" aria-labelledby="deals-title">
+      <h2 id="deals-title">Сделки купли-продажи жилья</h2>
+{no_data("релизы БНС о сделках не разобраны при последнем сборе")}
+    </section>"""
+    latest = obs[-1]
+    prev = obs[-2] if len(obs) > 1 and obs[-2]["date"] < latest["date"] else None
+    moves = []
+    if prev:
+        moves.append(f"<span>за месяц <b>{pct(latest['total'] / prev['total'] * 100)}</b></span>")
+    moves.append(f"<span>квартиры <b>{fmt_num(latest['flats'] / latest['total'] * 100, 1)}%</b></span>")
+    rows = "".join(
+        f"<tr><td>{month_label(o['date'])}</td><td>{money(o['total'])}</td><td>{money(o['flats'])}</td>"
+        f"<td>{money(o['houses'])}</td><td>{money(o['almaty']) if o.get('almaty') else 'н/д'}</td>"
+        f"<td>{money(o['astana']) if o.get('astana') else 'н/д'}</td></tr>"
+        for o in reversed(obs)
+    )
+    # Спарклайн только по непрерывному хвосту: пропуск месяца на линии выглядел бы как плавный переход.
+    tail = [obs[-1]]
+    for o in reversed(obs[:-1]):
+        y, m = map(int, tail[-1]["date"].split("-"))
+        expected = f"{y - 1}-12" if m == 1 else f"{y}-{m - 1:02d}"
+        if o["date"] != expected:
+            break
+        tail.append(o)
+    history = [{"date": o["date"], "value": o["total"]} for o in reversed(tail)]
+    return f"""    <section class="housing-section" id="housing-deals" aria-labelledby="deals-title">
+      <h2 id="deals-title">Сделки купли-продажи жилья</h2>
+      <p class="housing-note">Зарегистрированные сделки по всей стране. БНС публикует их пресс-релизом примерно на десятый день после месяца, таблицы к релизу нет, поэтому цифры взяты из текста. В таблице месяцы, релиз по которым удалось разобрать.</p>
+      <div class="housing-cards"><article class="card housing-card">
+        <header class="card-head"><h3>{month_label(latest["date"]).capitalize()}</h3></header>
+        <p class="value"><span class="num">{money(latest["total"])}</span> <span class="unit">сделок</span></p>
+        <p class="moves">{"".join(moves)}</p>
+        {spark(history)}
+        <p class="housing-note">График: {month_label(history[0]["date"])} … {month_label(latest["date"])}. Изменение к прошлому месяцу рассчитано JB Solutions.</p>
+      </article></div>
+      <div class="table-wrap"><table class="city-table"><caption class="sr-only">Сделки купли-продажи жилья по месяцам</caption>
+        <thead><tr><th scope="col">Месяц</th><th scope="col">всего</th><th scope="col">квартиры</th><th scope="col">дома</th><th scope="col">Алматы</th><th scope="col">Астана</th></tr></thead>
+        <tbody>{rows}</tbody></table></div>
+      <p class="housing-source">Источник: Бюро национальной статистики, пресс-релиз за {month_label(latest["date"])}.<br><a href="{html.escape(latest["url"], quote=True)}">{html.escape(latest["url"])}</a></p>
+    </section>"""
+
+
 def listings_section(by_id: dict, listings: dict | None) -> str:
     """Цены предложения площадок рядом с ценой БНС. Отдельный тип доверия, свои подписи."""
     if not listings or not (listings.get("kn") or listings.get("korter")):
@@ -311,7 +358,7 @@ def listings_section(by_id: dict, listings: dict | None) -> str:
     return "\n".join(parts)
 
 
-def build(data: dict, listings: dict | None = None) -> str:
+def build(data: dict, listings: dict | None = None, deals: dict | None = None) -> str:
     by_id = {item.get("series_id"): item for item in data.get("series", [])}
     if not by_id:
         body = no_data("ряды по жилью не собраны")
@@ -328,6 +375,8 @@ def build(data: dict, listings: dict | None = None) -> str:
             f'      <h2 id="summary-title">Страна за {month}</h2>\n'
             f'      <div class="housing-cards">\n{cards}\n      </div>\n    </section>\n'
             + cities_section(by_id)
+            + "\n"
+            + deals_section(deals)
             + "\n"
             + listings_section(by_id, listings)
             + "\n"
@@ -376,9 +425,10 @@ def main() -> None:
     dataset = Path(sys.argv[2]) if len(sys.argv) > 2 else DATASET
     listings_path = Path(sys.argv[3]) if len(sys.argv) > 3 else LISTINGS
     listings = json.loads(listings_path.read_text(encoding="utf-8")) if listings_path.exists() else None
+    deals = json.loads(DEALS.read_text(encoding="utf-8")) if DEALS.exists() else None
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(
-        build(json.loads(dataset.read_text(encoding="utf-8")), listings), encoding="utf-8"
+        build(json.loads(dataset.read_text(encoding="utf-8")), listings, deals), encoding="utf-8"
     )
 
 

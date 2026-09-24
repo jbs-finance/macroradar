@@ -22,6 +22,7 @@ REQUIRED_IDS = frozenset(
         "macroradar.health",
         "macroradar.housing",
         "macroradar.listings",
+        "macroradar.housing_deals",
     }
 )
 FRESHNESS_STATUSES = frozenset({"proposed", "manual_review", "existing_ad_hoc"})
@@ -279,6 +280,19 @@ SOURCE_REGISTRY = (
                 "source_id": "korter_kz_newbuild_prices",
                 "canonical_url": "https://korter.kz/",
                 "cadence": "daily",
+                "freshness_status": "existing_ad_hoc",
+            },
+        ),
+    },
+    {
+        # Таблицы у ряда нет: число сделок берётся из текста ежемесячных релизов БНС.
+        "dataset_id": "macroradar.housing_deals",
+        "collector": "deals.py",
+        "sources": (
+            {
+                "source_id": "bns_housing_deals_press_release",
+                "canonical_url": "https://stat.gov.kz/ru/news/",
+                "cadence": "monthly",
                 "freshness_status": "existing_ad_hoc",
             },
         ),

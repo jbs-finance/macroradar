@@ -187,6 +187,12 @@ jobs:
         timeout-minutes: 10
         run: python listings.py out/listings.json
 
+      # Число сделок из текста релизов БНС: при сбое разбора страница пишет «нет данных».
+      - name: Collect housing deals from BNS releases
+        continue-on-error: true
+        timeout-minutes: 10
+        run: python deals.py out/deals.json
+
       - name: Test page_check against collected data
         run: python -m pytest -q test_page_check.py
 

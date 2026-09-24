@@ -86,6 +86,7 @@ EXPECTED_SOURCE_URLS = {
     ): "https://taldau.stat.gov.kz/ru/NewIndex/GetIndex/701960",
     ("macroradar.listings", "kn_kz_sale_listings"): "https://www.kn.kz/",
     ("macroradar.listings", "korter_kz_newbuild_prices"): "https://korter.kz/",
+    ("macroradar.housing_deals", "bns_housing_deals_press_release"): "https://stat.gov.kz/ru/news/",
 }
 
 

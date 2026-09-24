@@ -75,7 +75,7 @@ INPUTS = {
     "housing": "housing.json",
 }
 # Вторичный источник: без выгрузки страница жилья собирается с пометкой «нет данных».
-OPTIONAL_INPUTS = {"listings": "listings.json"}
+OPTIONAL_INPUTS = {"listings": "listings.json", "deals": "deals.json"}
 COPIES = {
     "radar": "data.json",
     "pulse": "pulse.json",
@@ -281,7 +281,7 @@ def documents(
         "energy": build_energy(data["energy"]),
         "industry": build_industry(data["industry"]),
         "health": build_health(data["health"]),
-        "housing": build_housing(data["housing"], data.get("listings")),
+        "housing": build_housing(data["housing"], data.get("listings"), data.get("deals")),
         "methodology": methodology(data["radar"], data["pulse"], data["energy"]),
     }
     return {
