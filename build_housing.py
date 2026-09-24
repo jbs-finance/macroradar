@@ -38,6 +38,7 @@ from layout import (
 HERE = Path(__file__).resolve().parent
 DATASET = HERE / "out" / "housing.json"
 DEFAULT_OUT = HERE / "out" / "housing.html"
+LISTINGS = HERE / "out" / "listings.json"
 
 # Подлежащее и глагол для заголовка по сегменту рынка.
 HEADLINE_SUBJECT = {
@@ -247,7 +248,70 @@ def built_section(by_id: dict) -> str:
     </section>"""
 
 
-def build(data: dict) -> str:
+def listings_section(by_id: dict, listings: dict | None) -> str:
+    """Цены предложения площадок рядом с ценой БНС. Отдельный тип доверия, свои подписи."""
+    if not listings or not (listings.get("kn") or listings.get("korter")):
+        return f"""    <section class="housing-section" id="housing-listings" aria-labelledby="listings-title">
+      <h2 id="listings-title">Цены предложения на площадках</h2>
+{no_data("площадки объявлений не ответили при последнем сборе")}
+    </section>"""
+    day = datetime.fromisoformat(listings["generated_at"]).strftime("%d.%m.%Y")
+    bns = {
+        slug: {key: last(pick(by_id, f"price_{key}", slug)) for key in ("new", "resale")}
+        for _t, _name, slug in CITIES
+    }
+    slug_of = {name: slug for _t, name, slug in CITIES}
+    parts = [
+        f"""    <section class="housing-section" id="housing-listings" aria-labelledby="listings-title">
+      <h2 id="listings-title">Цены предложения на площадках</h2>
+      <p class="housing-note">Срез на {day}. Здесь цены, которые просят продавцы в объявлениях. Статистику БНС и цены сделок они не заменяют, зато показывают живой рынок: сколько квартир выставлено и почём.</p>"""
+    ]
+    kn = listings.get("kn") or []
+    if kn:
+        rows = "".join(
+            f"<tr><td>{html.escape(r['city'])}</td><td>{r['rooms']}</td>"
+            f"<td>{fmt_num(r['listings_on_site'], 0) if r.get('listings_on_site') else 'н/д'}</td>"
+            f"<td>{money(r['median'])}</td><td>{money(r['q1'])} … {money(r['q3'])}</td></tr>"
+            for r in kn
+        )
+        compare = []
+        for city in dict.fromkeys(r["city"] for r in kn):
+            points = bns.get(slug_of.get(city, ""), {})
+            new, resale = points.get("new"), points.get("resale")
+            if new and resale:
+                compare.append(
+                    f"{html.escape(city)}: новые {money(new['value'])}, вторичка {money(resale['value'])} ₸/м² ({month_label(resale['date'])})"
+                )
+        compare_note = f'<p class="housing-note">Для сравнения, БНС: {"; ".join(compare)}.</p>' if compare else ""
+        parts.append(f"""      <h3>Квартиры в продаже на kn.kz</h3>
+      <div class="table-wrap"><table class="city-table"><caption class="sr-only">Цены предложения kn.kz по комнатности</caption>
+        <thead><tr><th scope="col">Город</th><th scope="col">комнат</th><th scope="col">объявлений</th><th scope="col">медиана, ₸/м²</th><th scope="col">половина цен в диапазоне</th></tr></thead>
+        <tbody>{rows}</tbody></table></div>
+      <p class="housing-note">Медиана и квартили цены за м² по свежим объявлениям, до {max(r["sample"] for r in kn)} в строке: новые и вторичные квартиры вместе, как их выставляет площадка.</p>
+      {compare_note}""")
+    korter = listings.get("korter") or []
+    rows = []
+    for r in korter:
+        point = bns.get(slug_of.get(r["city"].split(" (")[0], ""), {}).get("new")
+        if point is None:
+            continue
+        gap = pct(r["avg_price_m2"] / point["value"] * 100)
+        rows.append(
+            (r["avg_price_m2"], f"<tr><td>{html.escape(r['city'].split(' (')[0])}</td><td>{money(r['avg_price_m2'])}</td><td>{money(point['value'])}</td><td>{gap}</td></tr>")
+        )
+    if rows:
+        rows.sort(key=lambda x: -x[0])
+        parts.append(f"""      <h3>Новостройки на korter.kz</h3>
+      <div class="table-wrap"><table class="city-table"><caption class="sr-only">Средняя цена новостроек korter.kz и БНС</caption>
+        <thead><tr><th scope="col">Город</th><th scope="col">korter, ₸/м²</th><th scope="col">БНС новые, ₸/м²</th><th scope="col">разница</th></tr></thead>
+        <tbody>{"".join(r[1] for r in rows)}</tbody></table></div>
+      <p class="housing-note">Средняя цена м² жилых комплексов на korter.kz, методику площадка не раскрывает. БНС за последний опубликованный месяц. Разница рассчитана JB Solutions.</p>""")
+    parts.append(f"""      <p class="housing-source">Источники: <a href="https://www.kn.kz/">kn.kz</a>, <a href="https://korter.kz/">korter.kz</a>. Сбор раз в сутки с паузой между запросами, без персональных данных продавцов.</p>
+    </section>""")
+    return "\n".join(parts)
+
+
+def build(data: dict, listings: dict | None = None) -> str:
     by_id = {item.get("series_id"): item for item in data.get("series", [])}
     if not by_id:
         body = no_data("ряды по жилью не собраны")
@@ -264,6 +328,8 @@ def build(data: dict) -> str:
             f'      <h2 id="summary-title">Страна за {month}</h2>\n'
             f'      <div class="housing-cards">\n{cards}\n      </div>\n    </section>\n'
             + cities_section(by_id)
+            + "\n"
+            + listings_section(by_id, listings)
             + "\n"
             + built_section(by_id)
         )
@@ -308,9 +374,11 @@ TEMPLATE = """<!doctype html>
 def main() -> None:
     out = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_OUT
     dataset = Path(sys.argv[2]) if len(sys.argv) > 2 else DATASET
+    listings_path = Path(sys.argv[3]) if len(sys.argv) > 3 else LISTINGS
+    listings = json.loads(listings_path.read_text(encoding="utf-8")) if listings_path.exists() else None
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(
-        build(json.loads(dataset.read_text(encoding="utf-8"))), encoding="utf-8"
+        build(json.loads(dataset.read_text(encoding="utf-8")), listings), encoding="utf-8"
     )
 
 

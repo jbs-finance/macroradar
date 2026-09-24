@@ -180,6 +180,13 @@ jobs:
               )
           PY
 
+      # Площадки объявлений вторичны: при их отказе страница жилья выходит с пометкой
+      # «нет данных», публикация не останавливается.
+      - name: Collect listing prices (kn.kz, korter.kz)
+        continue-on-error: true
+        timeout-minutes: 10
+        run: python listings.py out/listings.json
+
       - name: Test page_check against collected data
         run: python -m pytest -q test_page_check.py
 

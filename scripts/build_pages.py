@@ -74,6 +74,8 @@ INPUTS = {
     "health": "health.json",
     "housing": "housing.json",
 }
+# Вторичный источник: без выгрузки страница жилья собирается с пометкой «нет данных».
+OPTIONAL_INPUTS = {"listings": "listings.json"}
 COPIES = {
     "radar": "data.json",
     "pulse": "pulse.json",
@@ -217,6 +219,9 @@ def load_inputs(data_dir: Path, fixtures: bool) -> dict[str, dict]:
         if not path.exists():
             raise FileNotFoundError(f"не найдена выгрузка: {path}")
         loaded[key] = json.loads(path.read_text(encoding="utf-8"))
+    for key, filename in OPTIONAL_INPUTS.items():
+        path = source_dir / filename
+        loaded[key] = json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
     return loaded
 
 
@@ -276,7 +281,7 @@ def documents(
         "energy": build_energy(data["energy"]),
         "industry": build_industry(data["industry"]),
         "health": build_health(data["health"]),
-        "housing": build_housing(data["housing"]),
+        "housing": build_housing(data["housing"], data.get("listings")),
         "methodology": methodology(data["radar"], data["pulse"], data["energy"]),
     }
     return {

@@ -1,0 +1,198 @@
+{
+ "generated_at": "2026-09-24T13:15:31+00:00",
+ "kn": [
+  {
+   "city": "Алматы",
+   "rooms": 1,
+   "listings_on_site": 4365,
+   "sample": 90,
+   "url": "https://www.kn.kz/almaty/prodazha-odnokomnatnyh-kvartir",
+   "q1": 634306,
+   "median": 732051,
+   "q3": 918750
+  },
+  {
+   "city": "Алматы",
+   "rooms": 2,
+   "listings_on_site": 6840,
+   "sample": 90,
+   "url": "https://www.kn.kz/almaty/prodazha-dvuhkomnatnyh-kvartir",
+   "q1": 653055,
+   "median": 749591,
+   "q3": 867882
+  },
+  {
+   "city": "Алматы",
+   "rooms": 3,
+   "listings_on_site": 4863,
+   "sample": 90,
+   "url": "https://www.kn.kz/almaty/prodazha-trehkomnatnyh-kvartir",
+   "q1": 630379,
+   "median": 731279,
+   "q3": 874038
+  },
+  {
+   "city": "Алматы",
+   "rooms": 4,
+   "listings_on_site": 921,
+   "sample": 90,
+   "url": "https://www.kn.kz/almaty/prodazha-chetyrehkomnatnyh-kvartir",
+   "q1": 763141,
+   "median": 921684,
+   "q3": 1110139
+  },
+  {
+   "city": "Астана",
+   "rooms": 1,
+   "listings_on_site": 5066,
+   "sample": 90,
+   "url": "https://www.kn.kz/astana/prodazha-odnokomnatnyh-kvartir",
+   "q1": 506229,
+   "median": 597066,
+   "q3": 707264
+  },
+  {
+   "city": "Астана",
+   "rooms": 2,
+   "listings_on_site": 6797,
+   "sample": 90,
+   "url": "https://www.kn.kz/astana/prodazha-dvuhkomnatnyh-kvartir",
+   "q1": 534934,
+   "median": 663842,
+   "q3": 799275
+  },
+  {
+   "city": "Астана",
+   "rooms": 3,
+   "listings_on_site": 4291,
+   "sample": 90,
+   "url": "https://www.kn.kz/astana/prodazha-trehkomnatnyh-kvartir",
+   "q1": 500404,
+   "median": 638980,
+   "q3": 758866
+  },
+  {
+   "city": "Астана",
+   "rooms": 4,
+   "listings_on_site": 1058,
+   "sample": 90,
+   "url": "https://www.kn.kz/astana/prodazha-chetyrehkomnatnyh-kvartir",
+   "q1": 577442,
+   "median": 729968,
+   "q3": 900890
+  }
+ ],
+ "korter": [
+  {
+   "city": "Актобе",
+   "avg_price_m2": 318750,
+   "url": "https://korter.kz"
+  },
+  {
+   "city": "Алматы",
+   "avg_price_m2": 840056,
+   "url": "https://korter.kz"
+  },
+  {
+   "city": "Астана",
+   "avg_price_m2": 598527,
+   "url": "https://korter.kz"
+  },
+  {
+   "city": "Атырау",
+   "avg_price_m2": 514433,
+   "url": "https://korter.kz"
+  },
+  {
+   "city": "Бесагаш",
+   "avg_price_m2": 495000,
+   "url": "https://korter.kz"
+  },
+  {
+   "city": "Караганда",
+   "avg_price_m2": 413384,
+   "url": "https://korter.kz"
+  },
+  {
+   "city": "Каскелен",
+   "avg_price_m2": 450000,
+   "url": "https://korter.kz"
+  },
+  {
+   "city": "Кокшетау",
+   "avg_price_m2": 337857,
+   "url": "https://korter.kz"
+  },
+  {
+   "city": "Конаев (Капшагай)",
+   "avg_price_m2": 384000,
+   "url": "https://korter.kz"
+  },
+  {
+   "city": "Костанай",
+   "avg_price_m2": 467800,
+   "url": "https://korter.kz"
+  },
+  {
+   "city": "Косшы",
+   "avg_price_m2": 350000,
+   "url": "https://korter.kz"
+  },
+  {
+   "city": "Отеген Батыр",
+   "avg_price_m2": 490000,
+   "url": "https://korter.kz"
+  },
+  {
+   "city": "Павлодар",
+   "avg_price_m2": 430000,
+   "url": "https://korter.kz"
+  },
+  {
+   "city": "Петропавловск",
+   "avg_price_m2": 387500,
+   "url": "https://korter.kz"
+  },
+  {
+   "city": "Семей",
+   "avg_price_m2": 460000,
+   "url": "https://korter.kz"
+  },
+  {
+   "city": "Талгар",
+   "avg_price_m2": 413333,
+   "url": "https://korter.kz"
+  },
+  {
+   "city": "Тараз",
+   "avg_price_m2": 425000,
+   "url": "https://korter.kz"
+  },
+  {
+   "city": "Туздыбастау",
+   "avg_price_m2": 445000,
+   "url": "https://korter.kz"
+  },
+  {
+   "city": "Туркестан",
+   "avg_price_m2": 390000,
+   "url": "https://korter.kz"
+  },
+  {
+   "city": "Уральск",
+   "avg_price_m2": 380000,
+   "url": "https://korter.kz"
+  },
+  {
+   "city": "Усть-Каменогорск",
+   "avg_price_m2": 450022,
+   "url": "https://korter.kz"
+  },
+  {
+   "city": "Шымкент",
+   "avg_price_m2": 500616,
+   "url": "https://korter.kz"
+  }
+ ],
+ "issues": []
+}

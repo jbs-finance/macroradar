@@ -21,6 +21,7 @@ REQUIRED_IDS = frozenset(
         "macroradar.industry",
         "macroradar.health",
         "macroradar.housing",
+        "macroradar.listings",
     }
 )
 FRESHNESS_STATUSES = frozenset({"proposed", "manual_review", "existing_ad_hoc"})
@@ -259,6 +260,25 @@ SOURCE_REGISTRY = (
                 "source_id": "bns_taldau_housing_commissioned",
                 "canonical_url": "https://taldau.stat.gov.kz/ru/NewIndex/GetIndex/701960",
                 "cadence": "monthly",
+                "freshness_status": "existing_ad_hoc",
+            },
+        ),
+    },
+    {
+        # Цены предложения площадок объявлений: не статистика, отдельный тип доверия.
+        "dataset_id": "macroradar.listings",
+        "collector": "listings.py",
+        "sources": (
+            {
+                "source_id": "kn_kz_sale_listings",
+                "canonical_url": "https://www.kn.kz/",
+                "cadence": "daily",
+                "freshness_status": "existing_ad_hoc",
+            },
+            {
+                "source_id": "korter_kz_newbuild_prices",
+                "canonical_url": "https://korter.kz/",
+                "cadence": "daily",
                 "freshness_status": "existing_ad_hoc",
             },
         ),
