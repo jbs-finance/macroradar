@@ -15,7 +15,9 @@ concurrency:
 jobs:
   build-and-deploy:
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    # Свой раннер в Казахстане: kgd.gov.kz не отвечает раннерам GitHub (с 05.10.2026
+    # сбор бюджета падал по таймауту). Мак выключен: прогон ждёт в очереди.
+    runs-on: [self-hosted, Linux, ARM64, macroradar]
     timeout-minutes: 30
     environment: production
     steps:
@@ -225,6 +227,11 @@ jobs:
         run: >
           python scripts/build_pages.py --output dist
           --site-url https://jbs.finance --path-prefix /macroradar
+
+      # На своём раннере нет Node в PATH, а wrangler-action ставит wrangler через npm.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
 
       - name: Publish Macro Radar only
         uses: cloudflare/wrangler-action@v3
