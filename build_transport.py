@@ -63,12 +63,12 @@ def headline(by_id: dict) -> str:
     point = last(cargo)
     if point:
         text = (
-            f"Грузооборот за {month_label(point['date'])} года "
+            f"Грузооборот за {html.escape(month_label(point['date']))} года "
             f'<span class="hl">{change_phrase(point["value"], "вырос", "сократился")}</span> к прошлому году'
         )
         history = cargo["obs"]
         if len(history) > 12 and point["value"] <= min(o["value"] for o in history):
-            text += f", это минимум ряда с {history[0]['date'][:4]} года"
+            text += f", это минимум ряда с {html.escape(history[0]['date'][:4])} года"
         parts.append(text + ".")
     passenger = last(pick(by_id, "passenger_yoy"))
     if passenger:
@@ -79,8 +79,8 @@ def headline(by_id: dict) -> str:
     if transit and len(transit["obs"]) >= 2:
         before, now = transit["obs"][-2:]
         parts.append(
-            f"Транзит грузов за {now['date']} год {bn(now['value'])} млрд т·км, "
-            f"{pct(now['value'] / before['value'] * 100)} к {before['date']} году."
+            f"Транзит грузов за {html.escape(now['date'])} год {bn(now['value'])} млрд т·км, "
+            f"{pct(now['value'] / before['value'] * 100)} к {html.escape(before['date'])} году."
         )
     return f'<p class="housing-headline">{" ".join(parts)}</p>' if parts else ""
 
@@ -96,7 +96,7 @@ def index_card(by_id: dict, key: str, label: str) -> str:
         <header class="card-head"><h3>{html.escape(label)}</h3>{badge}</header>
         <p class="value"><span class="num">{pct(point["value"])}</span> <span class="unit">к тому же месяцу прошлого года</span></p>
         {spark(history)}
-        <p class="housing-note">{month_label(point["date"]).capitalize()}, индекс физического объёма БНС. График с января 2018 года.</p>
+        <p class="housing-note">{html.escape(month_label(point["date"]).capitalize())}, индекс физического объёма БНС. График с января 2018 года.</p>
       </article>"""
 
 
@@ -111,7 +111,7 @@ def directions_section(by_id: dict) -> str:
             )
             continue
         before, now = obs[-2:]
-        years = years or (before["date"], now["date"])
+        years = years or (html.escape(before["date"]), html.escape(now["date"]))
         nested = key in ("export", "import", "transit")
         name = f"&nbsp;&nbsp;{html.escape(label)}" if nested else html.escape(label)
         row_class = ' class="country"' if key == "total" else ""
@@ -171,7 +171,7 @@ def passenger_section(by_id: dict) -> str:
     source = (pick(by_id, "passenger_yoy") or {}).get("source_url", "")
     return f"""    <section class="housing-section" aria-labelledby="passenger-title">
       <h2 id="passenger-title">Пассажирооборот по регионам</h2>
-      <p class="housing-note">{month_label(stamp).capitalize()}, все виды транспорта, к тому же месяцу прошлого года. Регионы отсортированы по росту.</p>
+      <p class="housing-note">{html.escape(month_label(stamp).capitalize())}, все виды транспорта, к тому же месяцу прошлого года. Регионы отсортированы по росту.</p>
       <div class="table-wrap"><table class="city-table"><caption class="sr-only">Пассажирооборот по регионам</caption>
         <thead><tr><th scope="col">Регион</th><th scope="col">к прошлому году</th></tr></thead>
         <tbody>{"".join(r[1] for r in rows)}</tbody></table></div>
