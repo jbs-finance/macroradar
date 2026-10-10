@@ -691,19 +691,29 @@ def parse_business_activity(markup: str) -> dict:
 
     sectors: list[dict] = []
     used: set[str] = set()
-    for sentence in text.split("."):
-        if "состав" not in sentence:
-            continue
+    # Секторы бывают названы в одном предложении, а значения даны в следующем
+    # («в этих секторах составили соответственно»): тогда названия переносятся.
+    pending: list[tuple[int, str]] = []
+    # Разбор идёт с начала сообщения: в шапке страницы есть слова из словаря секторов.
+    for sentence in text[period.start() :].split("."):
         clean = re.sub(r"\([^)]*\)", " ", sentence)
-        numbers = [_num(n) for n in re.findall(r"\b(\d{2},\d)\b", clean)]
-        if not numbers:
-            continue
         found = []
         for stem, label in BAI_SECTORS.items():
             pos = clean.lower().find(stem)
             if pos >= 0 and label not in used:
                 found.append((pos, label))
         found.sort()
+        numbers = (
+            [_num(n) for n in re.findall(r"\b(\d{2},\d)\b", clean)]
+            if "состав" in sentence
+            else []
+        )
+        if not numbers:
+            pending = found
+            continue
+        if not found and len(pending) == len(numbers):
+            found = pending
+        pending = []
         for (_, label), value in zip(found, numbers):
             if 20 <= value <= 80:
                 sectors.append({"name": label, "value": value})
@@ -738,7 +748,8 @@ def fetch_business_activity() -> tuple[dict | None, list[str]]:
         title = re.sub(
             r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", raw_title))
         ).strip()
-        if "ИДА" not in title and "еловая активность" not in title:
+        # НБРК меняет падеж в заголовке: «деловая активность», «индекс деловой активности».
+        if "ИДА" not in title and not re.search(r"елов\w+ активност", title):
             continue
         url = NBK_HOST + href
         try:
