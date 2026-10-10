@@ -34,6 +34,7 @@ ENERGY_SERIES = [
         "unit": "тыс. т н. э.",
         "url": "https://stat.gov.kz/api/iblock/element/168581/json/file/en/",
         "terms": ["REPUBLIC OF KAZAKHSTAN", "Total"],
+        "total": "Total energy supply",
         "min": 1,
         "max": 1_000_000,
     },
@@ -43,6 +44,7 @@ ENERGY_SERIES = [
         "unit": "тыс. т н. э.",
         "url": "https://stat.gov.kz/api/iblock/element/45240/json/file/en/",
         "terms": ["REPUBLIC OF KAZAKHSTAN", "Total"],
+        "total": "Total final consumption",
         "min": 1,
         "max": 1_000_000,
     },
@@ -58,8 +60,43 @@ ENERGY_SERIES = [
 ]
 
 
+def parse_workbook_total(payload: dict[str, Any], spec: dict[str, Any]) -> list[Obs]:
+    """Книга Excel БНС, выгруженная в JSON по листам: берётся только итоговая строка.
+
+    С августа 2026 года так отдаются первичное и конечное потребление. Лист
+    «Commodity indicator» повторяет прежний ряд с той же точностью.
+    """
+    sheet = next(
+        (rows for name, rows in payload.items() if name.strip() == "Commodity indicator"),
+        None,
+    )
+    if not isinstance(sheet, list):
+        raise SourceError("неожиданная структура JSON")
+    table = [list(row.values()) for row in sheet if isinstance(row, dict) and row]
+    years = next(
+        (row for row in table if any(type(v) is int and 1990 <= v <= 2100 for v in row[1:])),
+        None,
+    )
+    totals = [
+        row for row in table if isinstance(row[0], str) and row[0].strip() == spec["total"]
+    ]
+    if years is None or len(totals) != 1:
+        raise SourceError("национальный разрез не найден или неоднозначен")
+    obs = [
+        Obs(date=str(year), value=float(value))
+        for year, value in zip(years[1:], totals[0][1:])
+        if type(year) is int and type(value) in (int, float)
+    ]
+    if not obs:
+        raise SourceError("периоды не найдены")
+    obs.sort(key=lambda item: item.date)
+    return obs
+
+
 def parse_national_series(payload: Any, spec: dict[str, Any]) -> list[Obs]:
     """Разбирает только национальный разрез, не подменяя его другим сегментом."""
+    if isinstance(payload, dict) and "total" in spec:
+        return parse_workbook_total(payload, spec)
     if not isinstance(payload, list):
         raise SourceError("неожиданная структура JSON")
     rows = [

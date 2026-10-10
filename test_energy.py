@@ -25,6 +25,25 @@ def test_parse_exact_national_series_and_sorts_dates():
     ]
 
 
+def workbook(total="Total energy supply"):
+    return {" Commodity indicator": [
+        {"a": "toe", "b": None, "c": None},
+        {"a": None, "b": 2024, "c": 2025},
+        {"a": f"{total}  ", "b": 74304.014, "c": 80050.5},
+        {"a": "Coal", "b": 35036.2, "c": "…"},
+    ]}
+
+
+def test_parse_workbook_takes_only_total_row():
+    obs = parse_national_series(workbook(), SPEC)
+    assert [(item.date, item.value) for item in obs] == [("2024", 74304.014), ("2025", 80050.5)]
+
+
+def test_workbook_of_another_indicator_is_rejected():
+    with pytest.raises(SourceError):
+        parse_national_series(workbook("Total final consumption"), SPEC)
+
+
 @pytest.mark.parametrize("bad", [[], {}, [{"termNames": SPEC["terms"], "periods": []}]])
 def test_empty_or_malformed_payload_is_rejected(bad):
     with pytest.raises(SourceError):
