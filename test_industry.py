@@ -1,7 +1,7 @@
 from datetime import date
 
 from industry import INDUSTRY_SERIES, KNOWN_GAPS, build, missing_series
-from regional import REGIONS
+from regional import REGIONS, places_of
 
 
 def periods(*pairs):
@@ -22,7 +22,7 @@ def test_known_gap_is_a_real_series_and_only_it_is_tolerated():
     ids = {
         f"kz.industry.{s['series_key']}.{slug}"
         for s in INDUSTRY_SERIES
-        for _, _, slug in REGIONS
+        for _, _, slug in places_of(s)
     }
     assert KNOWN_GAPS <= ids
     data = {"series": [{"series_id": i} for i in ids - KNOWN_GAPS]}
@@ -34,12 +34,19 @@ def test_known_gap_is_a_real_series_and_only_it_is_tolerated():
 
 
 def test_metallurgy_keeps_decimals_from_dump(tmp_path):
-    by_url = {str(s["index_id"]): dump_for(s) for s in INDUSTRY_SERIES}
+    by_index: dict[str, list] = {}
+    for s in INDUSTRY_SERIES:
+        by_index.setdefault(str(s["index_id"]), []).extend(dump_for(s))
+
+    calls = []
 
     def fetcher(url, **kwargs):
-        return by_url[url.split("/")[-1].split("?")[0]]
+        calls.append(url)
+        return by_index[url.split("/")[-1].split("?")[0]]
 
     data = build(tmp_path / "i.json", date(2026, 9, 23), fetcher)
+    # Пять рядов ГМК читают один дамп 26 МБ: он качается один раз.
+    assert len(calls) == len(set(calls)) == 2
     metallurgy = next(
         s for s in data["series"] if s["series_id"] == "kz.industry.metallurgy.aktobe"
     )
@@ -48,4 +55,14 @@ def test_metallurgy_keeps_decimals_from_dump(tmp_path):
 
 
 def test_metallurgy_dump_gets_a_raised_body_limit():
-    assert INDUSTRY_SERIES[0]["max_body"] > 26 * 1024 * 1024
+    for spec in INDUSTRY_SERIES:
+        if spec["index_id"] == 701625:
+            assert spec["max_body"] > 26 * 1024 * 1024
+
+
+def test_gmk_series_cover_only_publishing_regions():
+    by_key = {s["series_key"]: s for s in INDUSTRY_SERIES}
+    assert len(places_of(by_key["metallurgy_all"])) == 20
+    assert "almaty" not in {slug for *_, slug in places_of(by_key["mining"])}
+    assert len(places_of(by_key["metal_ores"])) == 12
+    assert len(places_of(by_key["nonferrous"])) == 16

@@ -13,6 +13,7 @@ from build_budget import build as build_budget
 from build_energy import build as build_energy
 from build_health import build as build_health
 from build_housing import build as build_housing
+from build_transport import build as build_transport
 from build_industry import build as build_industry
 from build_macroradar import build as build_hub
 from build_national_fund import build as build_national_fund
@@ -21,6 +22,7 @@ from build_tax import build as build_tax
 from build_trade import build as build_trade
 from health import HEALTH_SERIES
 from housing import HOUSING_SERIES
+from transport import TRANSPORT_SERIES
 from industry import INDUSTRY_SERIES
 from page_check import PAGES, problems
 from scripts.build_pages import fixture_regional
@@ -37,6 +39,7 @@ TOPICS = (
     "industry",
     "health",
     "housing",
+    "transport",
 )
 
 
@@ -105,6 +108,7 @@ def documents() -> dict[str, str]:
         "industry": build_industry(fixture_regional(INDUSTRY_SERIES, "kz.industry")),
         "health": build_health(fixture_regional(HEALTH_SERIES, "kz.health")),
         "housing": build_housing(fixture_regional(HOUSING_SERIES, "kz.housing")),
+        "transport": build_transport(fixture_regional(TRANSPORT_SERIES, "kz.transport")),
     }
 
 

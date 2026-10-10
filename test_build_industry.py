@@ -1,6 +1,6 @@
 from build_industry import build
 from industry import INDUSTRY_SERIES
-from regional import REGIONS
+from regional import REGIONS, places_of
 
 
 def dataset(stale_slug: str | None = None, missing_slug: str | None = None):
@@ -47,7 +47,8 @@ def test_builder_has_canonical_all_regions_exact_value_and_no_script():
     assert 'rel="canonical" href="https://jbs.finance/macroradar/industry/"' in page
     assert page.count('<section class="industry-section"') == len(INDUSTRY_SERIES)
     # по одному заголовку таблицы плюс строка на регион на каждый показатель
-    assert page.count("<tr>") == len(INDUSTRY_SERIES) * (len(REGIONS) + 1)
+    assert page.count("<tr>") == sum(len(places_of(s)) + 1 for s in INDUSTRY_SERIES)
+    assert "Показаны 12 регионов, по которым БНС публикует ряд." in page
     assert "2025" in page and "104" in page
     assert "<script" not in page.lower()
     for _term, name_ru, _slug in REGIONS:

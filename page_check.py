@@ -55,6 +55,7 @@ PAGES = {
     "industry": "industry/index.html",
     "health": "health/index.html",
     "housing": "housing/index.html",
+    "transport": "transport/index.html",
 }
 
 METHOD_PAGE = "methodology/index.html"
@@ -353,6 +354,7 @@ DATASETS = {
     "industry/data.json": "industry",
     "health/data.json": "health",
     "housing/data.json": "housing",
+    "transport/data.json": "transport",
 }
 
 # Блоки, где все даты обязаны быть в прошлом. Календарь будущих релизов сюда
@@ -360,7 +362,7 @@ DATASETS = {
 PAST_SECTIONS = {"macro": ()}
 
 # Страницы, которые публикуют штамп сборки: у хаба и Нацфонда его нет.
-STAMPED = ("macro", "trade", "budget", "tax", "energy", "industry", "health", "housing")
+STAMPED = ("macro", "trade", "budget", "tax", "energy", "industry", "health", "housing", "transport")
 
 
 @dataclass(frozen=True)
@@ -430,7 +432,15 @@ SECTIONS = {
     "industry": (
         # Двадцать областей на показатель, порог с запасом вниз как у "Доходы регионов".
         Section(
-            "Индекс производства чёрной металлургии", "металлургия по областям", rows=18
+            "Индекс производства горнодобывающей промышленности", "горнодобыча по областям", rows=17
+        ),
+        Section("Индекс добычи металлических руд", "руды по областям", rows=10),
+        Section("Индекс металлургического производства", "металлургия по областям", rows=18),
+        Section(
+            "Индекс производства чёрной металлургии", "чёрная металлургия по областям", rows=18
+        ),
+        Section(
+            "Индекс производства благородных и цветных металлов", "цветная металлургия по областям", rows=14
         ),
         Section("Число водозаборных сооружений", "водозабор по областям", rows=18),
     ),
@@ -442,6 +452,11 @@ SECTIONS = {
         Section("#housing-summary", "цены по стране", numbers=3, charts=3),
         Section("Цены по городам", "цены по городам", rows=18),
         Section("Ввод жилья по регионам", "ввод по регионам", rows=18),
+    ),
+    "transport": (
+        Section("#transport-summary", "индексы по стране", numbers=2, charts=2),
+        Section("Грузооборот по видам сообщения", "виды сообщения", rows=5),
+        Section("Пассажирооборот по регионам", "пассажирооборот по регионам", rows=18),
     ),
 }
 
