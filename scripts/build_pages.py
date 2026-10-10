@@ -25,6 +25,7 @@ from build_budget import build as build_budget
 from build_energy import build as build_energy
 from build_health import build as build_health
 from build_housing import build as build_housing
+from build_transport import build as build_transport
 from build_industry import build as build_industry
 from build_macroradar import build as build_hub
 from build_national_fund import build as build_national_fund
@@ -42,6 +43,7 @@ from build_trade import build as build_trade
 from health import HEALTH_SERIES
 from health import SOURCE as HEALTH_SOURCE
 from housing import HOUSING_SERIES
+from transport import TRANSPORT_SERIES
 from industry import INDUSTRY_SERIES
 from regional import places_of
 
@@ -58,6 +60,7 @@ PAGE_PATHS = {
     "industry": "industry/index.html",
     "health": "health/index.html",
     "housing": "housing/index.html",
+    "transport": "transport/index.html",
     "methodology": "methodology/index.html",
 }
 INPUTS = {
@@ -73,6 +76,7 @@ INPUTS = {
     "industry": "industry.json",
     "health": "health.json",
     "housing": "housing.json",
+    "transport": "transport.json",
 }
 # Вторичный источник: без выгрузки страница жилья собирается с пометкой «нет данных».
 OPTIONAL_INPUTS = {"listings": "listings.json", "deals": "deals.json"}
@@ -89,6 +93,7 @@ COPIES = {
     "industry": "industry/data.json",
     "health": "health/data.json",
     "housing": "housing/data.json",
+    "transport": "transport/data.json",
 }
 HEADERS = """/*
   Content-Security-Policy: default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src 'self' https://jbs.finance; font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
@@ -215,6 +220,9 @@ def load_inputs(data_dir: Path, fixtures: bool) -> dict[str, dict]:
         if fixtures and key == "housing":
             loaded[key] = fixture_regional(HOUSING_SERIES, "kz.housing")
             continue
+        if fixtures and key == "transport":
+            loaded[key] = fixture_regional(TRANSPORT_SERIES, "kz.transport")
+            continue
         path = source_dir / filename
         if not path.exists():
             raise FileNotFoundError(f"не найдена выгрузка: {path}")
@@ -282,6 +290,7 @@ def documents(
         "industry": build_industry(data["industry"]),
         "health": build_health(data["health"]),
         "housing": build_housing(data["housing"], data.get("listings"), data.get("deals")),
+        "transport": build_transport(data["transport"]),
         "methodology": methodology(data["radar"], data["pulse"], data["energy"]),
     }
     return {

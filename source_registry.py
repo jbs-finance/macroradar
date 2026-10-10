@@ -23,6 +23,7 @@ REQUIRED_IDS = frozenset(
         "macroradar.housing",
         "macroradar.listings",
         "macroradar.housing_deals",
+        "macroradar.transport",
     }
 )
 FRESHNESS_STATUSES = frozenset({"proposed", "manual_review", "existing_ad_hoc"})
@@ -293,6 +294,30 @@ SOURCE_REGISTRY = (
                 "source_id": "bns_housing_deals_press_release",
                 "canonical_url": "https://stat.gov.kz/ru/news/",
                 "cadence": "monthly",
+                "freshness_status": "existing_ad_hoc",
+            },
+        ),
+    },
+    {
+        "dataset_id": "macroradar.transport",
+        "collector": "transport.py",
+        "sources": (
+            {
+                "source_id": "bns_taldau_cargo_index",
+                "canonical_url": "https://taldau.stat.gov.kz/ru/NewIndex/GetIndex/702192",
+                "cadence": "monthly",
+                "freshness_status": "existing_ad_hoc",
+            },
+            {
+                "source_id": "bns_taldau_passenger_index",
+                "canonical_url": "https://taldau.stat.gov.kz/ru/NewIndex/GetIndex/702190",
+                "cadence": "monthly",
+                "freshness_status": "existing_ad_hoc",
+            },
+            {
+                "source_id": "bns_taldau_cargo_turnover",
+                "canonical_url": "https://taldau.stat.gov.kz/ru/NewIndex/GetIndex/702179",
+                "cadence": "annual",
                 "freshness_status": "existing_ad_hoc",
             },
         ),

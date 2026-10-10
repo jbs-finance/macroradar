@@ -180,6 +180,28 @@ jobs:
               )
           PY
 
+      - name: Collect Transport data
+        run: python transport.py out/transport.json
+
+      - name: Reject stale Transport data
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          transport = json.loads(Path("out/transport.json").read_text(encoding="utf-8"))
+          stale = [
+              row.get("series_id", "unknown")
+              for row in transport.get("series", [])
+              if row.get("stale")
+          ]
+          if stale:
+              raise SystemExit(
+                  "транспортные данные не обновлены, публикация остановлена: "
+                  + ", ".join(stale)
+              )
+          PY
+
       # Площадки объявлений вторичны: при их отказе страница жилья выходит с пометкой
       # «нет данных», публикация не останавливается.
       - name: Collect listing prices (kn.kz, korter.kz)
@@ -265,4 +287,5 @@ jobs:
           check_page /macroradar/industry/ https://jbs.finance/macroradar/industry/
           check_page /macroradar/health/ https://jbs.finance/macroradar/health/
           check_page /macroradar/housing/ https://jbs.finance/macroradar/housing/
+          check_page /macroradar/transport/ https://jbs.finance/macroradar/transport/
           check_page /macroradar/methodology/ https://jbs.finance/macroradar/methodology/

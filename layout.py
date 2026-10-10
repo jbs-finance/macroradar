@@ -26,6 +26,7 @@ TABS = [
     ("industry", "Отрасли", "/macroradar/industry/"),
     ("health", "Здоровье", "/macroradar/health/"),
     ("housing", "Жильё", "/macroradar/housing/"),
+    ("transport", "Транспорт", "/macroradar/transport/"),
 ]
 
 HEADER_STYLE = """
@@ -48,16 +49,12 @@ HEADER_STYLE = """
   transition: color var(--dur-in) var(--ease-out), border-color var(--dur-in) var(--ease-out); }
 .tabs a[aria-current="page"], .tabs label:hover { color: var(--fg); border-bottom-color: var(--accent); }
 .tabs a:hover, .tabs a:focus-visible, .tabs label:focus-visible { color: var(--fg); }
-.tabs .title { margin-inline-end: auto; padding: 0.8rem 0.75rem 0.8rem 0; font-weight: 600; color: var(--fg); font-size: 0.9375rem; white-space: nowrap; }
 [id] { scroll-margin-top: 64px; }
-/* Десять вкладок с заголовком занимают около 1150 px: ниже этой ширины активная уходит за край. */
-@media (max-width: 1180px) { .tabs .title { display: none; } }
 @media (max-width: 640px) {
   .site-bar .inner { height: auto; min-height: 52px; padding-block: 0.65rem; align-items: flex-start; }
   .site-brand { flex: 0 0 auto; }
   .site-links { justify-content: flex-end; gap: 0.35rem 0.7rem; font-size: 0.75rem; }
   .tabs .inner { justify-content: flex-start; padding-inline: 0.65rem; overflow-x: auto; }
-  .tabs .title { display: none; }
   .tabs a, .tabs label { padding-inline: 0.25rem; font-size: 0.75rem; }
 }
 @media print { .site-bar, .tabs { display: none; } }
@@ -132,7 +129,6 @@ def site_header(active: str) -> str:
 </div>
 <nav class="tabs" aria-label="Разделы радара">
   <div class="inner">
-    <span class="title">Радар экономики Казахстана</span>
 {tabs}
   </div>
 </nav>"""

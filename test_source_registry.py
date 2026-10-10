@@ -87,6 +87,9 @@ EXPECTED_SOURCE_URLS = {
     ("macroradar.listings", "kn_kz_sale_listings"): "https://www.kn.kz/",
     ("macroradar.listings", "korter_kz_newbuild_prices"): "https://korter.kz/",
     ("macroradar.housing_deals", "bns_housing_deals_press_release"): "https://stat.gov.kz/ru/news/",
+    ("macroradar.transport", "bns_taldau_cargo_index"): "https://taldau.stat.gov.kz/ru/NewIndex/GetIndex/702192",
+    ("macroradar.transport", "bns_taldau_passenger_index"): "https://taldau.stat.gov.kz/ru/NewIndex/GetIndex/702190",
+    ("macroradar.transport", "bns_taldau_cargo_turnover"): "https://taldau.stat.gov.kz/ru/NewIndex/GetIndex/702179",
 }
 
 

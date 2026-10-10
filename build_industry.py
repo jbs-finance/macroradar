@@ -19,7 +19,7 @@ from pathlib import Path
 
 from build_pulse import STYLE
 from industry import INDUSTRY_SERIES
-from regional import REGIONS
+from regional import REGIONS, places_of
 from layout import (
     ACCESSIBILITY_STYLE,
     CTA_STYLE,
@@ -38,11 +38,6 @@ from layout import (
 HERE = Path(__file__).resolve().parent
 DATASET = HERE / "out" / "industry.json"
 DEFAULT_OUT = HERE / "out" / "industry.html"
-
-# Отображение сортируется по русскому имени, а не по порядку REGIONS в industry.py
-# (там порядок это порядок обнаружения term id, не алфавит).
-REGIONS_BY_SLUG = {slug: name_ru for _term, name_ru, slug in REGIONS}
-REGION_ORDER = sorted(REGIONS_BY_SLUG, key=lambda slug: REGIONS_BY_SLUG[slug])
 
 INDUSTRY_STYLE = """
 .industry-hero { padding-block: clamp(1.5rem, 5vw, 2.5rem) 1rem; max-width: 760px; }
@@ -101,13 +96,15 @@ def region_row(slug: str, name_ru: str, series: dict | None) -> str:
 def indicator_section(
     spec: dict, by_id: dict[str, dict], prefix: str = "kz.industry"
 ) -> str:
-    ids = {slug: f"{prefix}.{spec['series_key']}.{slug}" for slug in REGION_ORDER}
-    rows = "\n".join(
-        region_row(slug, REGIONS_BY_SLUG[slug], by_id.get(ids[slug]))
-        for slug in REGION_ORDER
-    )
-    sample = next(
-        (by_id[ids[slug]] for slug in REGION_ORDER if ids[slug] in by_id), None
+    names = {slug: name for _term, name, slug in places_of(spec)}
+    order = sorted(names, key=names.get)
+    ids = {slug: f"{prefix}.{spec['series_key']}.{slug}" for slug in order}
+    rows = "\n".join(region_row(slug, names[slug], by_id.get(ids[slug])) for slug in order)
+    sample = next((by_id[ids[slug]] for slug in order if ids[slug] in by_id), None)
+    scope = (
+        ""
+        if len(order) == len(REGIONS)
+        else f" Показаны {len(order)} регионов, по которым БНС публикует ряд."
     )
     source = str((sample or {}).get("source") or "Бюро национальной статистики")
     source_url = str((sample or {}).get("source_url", ""))
@@ -121,7 +118,7 @@ def indicator_section(
       <table class="region-table"><caption class="sr-only">{html.escape(spec["name_ru"])} по областям</caption>
         <thead><tr><th scope="col">Область</th><th scope="col">Значение</th><th scope="col">Год</th><th scope="col">Свежесть</th></tr></thead>
         <tbody>{rows}</tbody></table>
-      <p class="industry-source">Единица: {html.escape(spec["unit"])}. Источник: {html.escape(source)}.<br>{source_link}</p>
+      <p class="industry-source">Единица: {html.escape(spec["unit"])}.{scope} Источник: {html.escape(source)}.<br>{source_link}</p>
     </section>'''
 
 
@@ -134,7 +131,7 @@ def build(data: dict) -> str:
     return TEMPLATE.format(
         meta=meta_tags(
             "Отраслевые показатели Казахстана по областям: БНС",
-            "Металлургия и водозабор по двадцати областям Казахстана из Бюро национальной статистики.",
+            "Горнодобыча, добыча металлических руд, чёрная и цветная металлургия и водозабор по областям Казахстана из Бюро национальной статистики.",
             "/macroradar/industry/",
         ),
         style=STYLE
@@ -159,7 +156,7 @@ TEMPLATE = """<!doctype html>
 {meta}<title>Отраслевые показатели Казахстана по областям</title><style>{style}</style></head><body>
 {skip_link}{header}<div class="wrap"><header class="industry-hero"><h1>Отраслевые показатели по областям</h1>
 <p class="lede">Годовые ряды Бюро национальной статистики, только уровень области: районы и города
-районного значения не включены. Металлургия читается как индекс к предыдущему году, не как объём производства.</p>
+районного значения не включены. Горно-металлургический комплекс показан индексами производства к предыдущему году: 100 означает объём прошлого года.</p>
 <p class="updated">Собрано <time datetime="{generated_iso}">{generated}</time></p></header>{issues}
 <main id="main-content">{sections}{cta}</main>{footer}</div></body></html>"""
 
