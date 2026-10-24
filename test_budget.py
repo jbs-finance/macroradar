@@ -174,7 +174,7 @@ def test_parse_dynamics_accepts_english_and_trims_empty_future_months():
         ["DGD in Akmola region", "1000000", "2000000", "", ""],
     ]
     data = parse_dynamics(rows)
-    assert data["months"] == ["January", "February"]
+    assert data["months"] == ["Январь", "Февраль"]
     assert data["total"] == [1.0, 2.0]
     assert data["regions"][0] == {"name": "Акмолинская", "values": [1.0, 2.0]}
     assert budget.dynamics_year(rows) == 2026

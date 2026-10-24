@@ -54,6 +54,23 @@ MONTHS = [
     "Декабрь",
 ]
 
+MONTHS_EN = {
+    "january": "Январь",
+    "february": "Февраль",
+    "march": "Март",
+    "april": "Апрель",
+    "may": "Май",
+    "june": "Июнь",
+    "july": "Июль",
+    # В текущей книге КГД месяц подписан с опечаткой.
+    "jule": "Июль",
+    "august": "Август",
+    "september": "Сентябрь",
+    "october": "Октябрь",
+    "november": "Ноябрь",
+    "december": "Декабрь",
+}
+
 # Коды бюджетной классификации верхнего уровня. Берём только их: подстатьи дают
 # сотни строк, а на странице нужен читаемый разрез из десятка позиций.
 TAX_CODES = {
@@ -379,7 +396,11 @@ def parse_dynamics(rows: list[list[str]]) -> dict:
     )
     if header_idx is None:
         raise SourceError("в файле динамики нет строки с месяцами")
-    months = [c for c in rows[header_idx] if c][:12]
+    months = [
+        MONTHS_EN.get(c.strip().lower(), c.strip())
+        for c in rows[header_idx]
+        if c.strip()
+    ][:12]
 
     total: list[float] = []
     regions: list[dict] = []

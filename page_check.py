@@ -322,7 +322,7 @@ MIN_OBS = 15  # длина ряда, ниже которой ряд считае
 MIN_PULSE_SERIES = 10  # рядов не короче MIN_OBS в pulse.json (12 из 13)
 MIN_MACRO_SERIES = 2  # ставка и месячная инфляция в data.json (2)
 MIN_MACRO_INFLATION = 15  # месяцев инфляции в data.json (21)
-MIN_MACRO_CALENDAR = 6  # ближайших релизов (14)
+MIN_MACRO_CALENDAR = 1  # календарь меняется ежедневно и иногда содержит 1–3 релиза
 MIN_MACRO_EVENTS = 3  # событий «что изменилось» (5)
 MIN_MACRO_NEIGHBOURS = 3  # разрезов по соседям (3)
 MIN_TRADE_SERIES = 5  # рядов внешней торговли (5)
@@ -331,7 +331,6 @@ MIN_TRADE_PARTNERS = 10  # партнёров в каждом разрезе (10
 MIN_FUND_ASSETS = 100  # месячных точек активов Нацфонда (121)
 MIN_FUND_RETURNS = 8  # годовых точек доходности (10)
 MIN_KGD_REGIONS = 15  # областей в разбивке КГД, всего в стране 20 (21 объект)
-MIN_KGD_MONTHS = 10  # месяцев в помесячном разрезе КГД (12)
 MIN_OBLAST_REGIONS = 20  # регионов в бюллетене Минфина, их ровно двадцать (20)
 MIN_MINFIN_MONTHS = 10  # месяцев в графике исполнения плана (11)
 MIN_MINFIN_KINDS = 5  # видов налогов в структуре поступлений (7)
@@ -395,7 +394,8 @@ SECTIONS = {
         Section("#fx", "официальные курсы валют", numbers=4, charts=4),
         Section("#macro-economy", "экономика", numbers=5, charts=5),
         Section("#bns", "данные БНС", numbers=3, charts=3),
-        Section("#business", "деловая активность", numbers=5),
+        # НБРК иногда публикует только сводный индекс без отраслевого разреза.
+        Section("#business", "деловая активность", numbers=1),
         Section("#peers", "Казахстан среди соседей", numbers=3, items=9),
     ),
     "trade": (
@@ -462,7 +462,8 @@ SECTIONS = {
 
 TECHNICAL_SECTIONS = (
     Section("#events", "что изменилось", items=3),
-    Section("#calendar", "ближайшие релизы", items=6),
+    # Число будущих публикаций зависит от даты запуска; важен непустой блок.
+    Section("#calendar", "ближайшие релизы", items=1),
     Section("#sources", "источники и свежесть", rows=12),
 )
 
@@ -756,6 +757,10 @@ def json_expectations(relpath: str, payload: dict) -> list[tuple[str, int, int]]
             ("базовых величин", size(payload, "base"), MIN_TAX_BASE),
         ]
     if relpath == "tax/budget.json":
+        dynamics = payload.get("dynamics") or {}
+        period = str(dynamics.get("period") or "")
+        match = re.fullmatch(r"20\d{2}-(0[1-9]|1[0-2])", period)
+        expected_months = int(match.group(1)) if match else 1
         return [
             (
                 "областей в разбивке КГД",
@@ -765,7 +770,7 @@ def json_expectations(relpath: str, payload: dict) -> list[tuple[str, int, int]]
             (
                 "месяцев в разбивке КГД",
                 size(payload, "dynamics", "months"),
-                MIN_KGD_MONTHS,
+                expected_months,
             ),
             (
                 "видов налогов в структуре",

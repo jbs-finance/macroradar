@@ -21,7 +21,13 @@ from pathlib import Path
 
 import pytest
 
-from page_check import DATASETS, content_problems, parse_stamp, problems
+from page_check import (
+    DATASETS,
+    content_problems,
+    json_expectations,
+    parse_stamp,
+    problems,
+)
 from scripts.build_pages import SITE_URL, load_inputs, write_tree
 
 HERE = Path(__file__).resolve().parent
@@ -201,6 +207,49 @@ def test_missing_dumps_are_caught(sandbox: Path):
         assert any(
             line.startswith(f"{relpath}: выгрузки нет") for line in found
         ), relpath
+
+
+def test_kgd_month_gate_matches_the_reported_period():
+    payload = {
+        "dynamics": {
+            "period": "2026-08",
+            "months": [f"месяц {number}" for number in range(8)],
+            "regions": [{}] * 21,
+        },
+        "structure": {"items": [{}] * 7},
+    }
+    expectations = {
+        name: (got, want)
+        for name, got, want in json_expectations("tax/budget.json", payload)
+    }
+    assert expectations["месяцев в разбивке КГД"] == (8, 8)
+
+    payload["dynamics"]["months"].pop()
+    expectations = {
+        name: (got, want)
+        for name, got, want in json_expectations("tax/budget.json", payload)
+    }
+    assert expectations["месяцев в разбивке КГД"] == (7, 8)
+
+
+def test_macro_calendar_gate_accepts_a_short_real_calendar_but_not_an_empty_one():
+    payload = {
+        "series": [{}, {}],
+        "inflation": [{}] * 15,
+        "calendar": [{}, {}, {}],
+        "events": [{}, {}, {}],
+        "neighbours": [{"items": [{}, {}, {}]}] * 3,
+    }
+    expectations = {
+        name: (got, want) for name, got, want in json_expectations("data.json", payload)
+    }
+    assert expectations["релизов в календаре"] == (3, 1)
+
+    payload["calendar"] = []
+    expectations = {
+        name: (got, want) for name, got, want in json_expectations("data.json", payload)
+    }
+    assert expectations["релизов в календаре"] == (0, 1)
 
 
 def test_stale_dumps_are_caught(live: Path):
