@@ -5,6 +5,7 @@ from datetime import date, timedelta
 
 import pytest
 
+import etl
 from etl import (
     Obs,
     Series,
@@ -141,6 +142,37 @@ class TestRetryPolicy:
 
     def test_network_error_is_retried(self):
         assert retriable(ConnectionResetError("сброс")) is True
+
+    def test_worldbank_dns_recovers_after_transient_failure(self, monkeypatch):
+        calls = []
+        pauses = []
+
+        def fake_resolve(*args, **kwargs):
+            calls.append(args)
+            if len(calls) < 3:
+                raise etl.socket.gaierror(-2, "temporary name resolution failure")
+            return [(etl.socket.AF_INET, etl.socket.SOCK_STREAM, 6, "", ("1.1.1.1", 443))]
+
+        monkeypatch.setattr(etl.socket, "getaddrinfo", fake_resolve)
+        monkeypatch.setattr(etl.time, "sleep", pauses.append)
+        etl.wait_for_worldbank_dns(attempts=4, max_pause=2)
+        assert len(calls) == 3
+        assert pauses == [1.5, 2]
+
+    def test_worldbank_dns_permanent_failure_is_bounded(self, monkeypatch):
+        calls = []
+        pauses = []
+
+        def fake_resolve(*args, **kwargs):
+            calls.append(args)
+            raise etl.socket.gaierror(-2, "name resolution failure")
+
+        monkeypatch.setattr(etl.socket, "getaddrinfo", fake_resolve)
+        monkeypatch.setattr(etl.time, "sleep", pauses.append)
+        with pytest.raises(SourceError, match="за 3 попыток"):
+            etl.wait_for_worldbank_dns(attempts=3, max_pause=2)
+        assert len(calls) == 3
+        assert pauses == [1.5, 2]
 
 
 class TestCoverageGap:

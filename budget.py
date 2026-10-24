@@ -1,15 +1,13 @@
 """Поступления налогов в бюджет Казахстана по данным Комитета госдоходов.
 
 Два среза: помесячная динамика в разрезе областей и структура по видам налогов.
-Оба лежат в таблицах на сайте КГД, свежесть у них разная и отстаёт от текущего
+Оба лежат в таблицах КГД в каталоге gov.kz, свежесть у них разная и отстаёт от текущего
 месяца, поэтому период каждого среза подписывается на странице явно.
 
 Две особенности источника, из-за которых код выглядит именно так:
 
-1. У kgd.gov.kz в цепочке самоподписанный сертификат. Стандартный клиент Python
-   его отвергает, поэтому файлы качаются через curl, который берёт системное
-   хранилище корней. Отключать проверку сертификата нельзя: данные идут на
-   публичную страницу, и подмена по дороге не должна быть возможной.
+1. Список документов берётся из публичного API gov.kz: прежние страницы kgd.gov.kz
+   теперь перенаправляют на главную и больше не содержат ссылок на отчёты.
 2. Таблицы приходят в xlsx, то есть zip с XML. Разбирается стандартной
    библиотекой, сторонние пакеты не нужны.
 
@@ -29,18 +27,17 @@ from pathlib import Path
 
 # Ошибка источника одна на все модули: у оболочек разные импорты, и две разные
 # исключения с одним именем расходились по except мимо друг друга.
-from etl import SourceError
+from etl import SourceError, fetch_json
 
 HERE = Path(__file__).resolve().parent
 RAW = HERE / "raw"
 DEFAULT_DATASET = HERE / "out" / "budget.json"
 
-KGD = "https://kgd.gov.kz"
-DYNAMICS_PAGE = f"{KGD}/ru/content/dinamika-postupleniy-nalogov-i-platezhey-v-gosudarstvennyy-byudzhet-1"
-FACT_PAGE = (
-    f"{KGD}/ru/content/fakticheskie-postupleniya-po-nalogam-i-platezham-"
-    "v-gosudarstvennyy-byudzhet-za-2002-2025-gg"
-)
+KGD = "https://www.gov.kz"
+KGD_DOCUMENTS_API = f"{KGD}/api/v1/public/content-manager/documents"
+KGD_ORG_ID = 1062
+KGD_STATS_PAGE = f"{KGD}/org/kgd/activities/655?lang=ru"
+KGD_LISTING_MAX_BODY = 16 * 1024 * 1024
 
 MONTHS = [
     "Январь",
@@ -115,7 +112,20 @@ def download(
     part = path.with_name(path.name + ".part")
     try:
         result = subprocess.run(
-            ["curl", "-fsSL", "--max-time", str(timeout), url, "-o", str(part)],
+            [
+                "curl",
+                "-fsSL",
+                "--retry",
+                "3",
+                "--retry-delay",
+                "2",
+                "--retry-all-errors",
+                "--max-time",
+                str(timeout),
+                url,
+                "-o",
+                str(part),
+            ],
             capture_output=True,
         )
         if result.returncode != 0:
@@ -239,6 +249,71 @@ def as_number(raw: str) -> float | None:
         return None
 
 
+# --- Каталог документов КГД на gov.kz ---------------------------------
+
+
+def kgd_documents() -> list[dict]:
+    """Документы управления статистики КГД, свежие первыми."""
+    url = f"{KGD_DOCUMENTS_API}?gosorgan={KGD_ORG_ID}&size=2000&page=0"
+    rows = fetch_json(
+        url, "kgd_documents.json", timeout=90, max_body=KGD_LISTING_MAX_BODY
+    )
+    if not isinstance(rows, list):
+        raise SourceError("список документов КГД вернулся не списком")
+    rows.sort(
+        key=lambda row: (row.get("created_date") or "", row.get("id") or 0),
+        reverse=True,
+    )
+    return rows
+
+
+def document_file(row: dict) -> str | None:
+    """Первое xlsx-вложение из обоих полей карточки gov.kz."""
+    files = [
+        item.get("document")
+        for key in ("full_text", "other_files")
+        for item in (row.get(key) or [])
+        if item.get("document")
+    ]
+    return next((path for path in files if path.lower().endswith(".xlsx")), None)
+
+
+def kgd_reports(kind: str, rows: list[dict] | None = None) -> list[dict]:
+    """Таблицы нужного среза; Нацфонд не примешивается к госбюджету."""
+    rows = rows if rows is not None else kgd_documents()
+    found: list[dict] = []
+    for row in rows:
+        low = str(row.get("title") or "").lower()
+        if "national fund" in low or "национальн" in low:
+            continue
+        if kind == "dynamics":
+            matches = (
+                "dynamics of tax revenues" in low and "state budget" in low
+            ) or bool(
+                re.search(
+                    r"динамик.*налог.*государств.*бюдж", low
+                )
+            )
+        else:
+            matches = (
+                ("actual revenues" in low or "actual receipts" in low)
+                and "tax" in low
+                and "state budget" in low
+                and "region" in low
+            ) or bool(
+                re.search(
+                    r"фактическ.*поступлен.*налог.*(?:гб|государств.*бюдж).*регион", low
+                )
+            )
+        path = document_file(row)
+        if matches and path:
+            found.append({**row, "document": path})
+    if not found:
+        label = "динамики" if kind == "dynamics" else "фактических поступлений"
+        raise SourceError(f"в каталоге КГД нет xlsx {label}")
+    return found
+
+
 # --- Помесячная динамика в разрезе областей -----------------------------------
 
 
@@ -258,6 +333,36 @@ def dynamics_links(page: str) -> list[tuple[str, int]]:
     return [(url, year) for year, url in sorted(found.items(), reverse=True)]
 
 
+REGION_NAMES_EN = {
+    "dgd in akmola region": "Акмолинская",
+    "dgd in the aktobe region": "Актюбинская",
+    "dgd in the almaty region": "Алматинская",
+    "dgd in atyrau region": "Атырауская",
+    "dgd in the east kazakhstan region": "Восточно-Казахстанская",
+    "dgd in zhambyl region": "Жамбылская",
+    "dgd in the west kazakhstan region": "Западно-Казахстанская",
+    "dgd in the karaganda region": "Карагандинская",
+    "dgd in the kyzylorda region": "Кызылординская",
+    "dgd in kostanay region": "Костанайская",
+    "dgd in the mangystau region": "Мангистауская",
+    "dgd in the pavlodar region": "Павлодарская",
+    "dgd in the north kazakhstan region": "Северо-Казахстанская",
+    "dgd for the turkestan region": "Туркестанская",
+    "dgd in shymkent": "Шымкент",
+    "dgd in almaty": "Алматы",
+    "dgd for the city of astana": "Астана",
+    "dgd for the zhetysu region": "Жетысуская",
+    "dgd for the abay region": "Абайская",
+    "dgd for the ulytau region": "Улытауская",
+    "kgd mf rk": "КГД МФ РК",
+}
+
+
+def region_name(name: str) -> str:
+    key = re.sub(r"\s+", " ", name).strip().lower()
+    return REGION_NAMES_EN.get(key, name)
+
+
 def parse_dynamics(rows: list[list[str]]) -> dict:
     """Строка «ДОХОДЫ, всего» и строки областей, колонки это месяцы.
 
@@ -267,7 +372,8 @@ def parse_dynamics(rows: list[list[str]]) -> dict:
         (
             i
             for i, r in enumerate(rows)
-            if r and r[0].strip().lower().startswith("январь")
+            if r
+            and r[0].strip().lower().startswith(("январь", "january"))
         ),
         None,
     )
@@ -285,36 +391,81 @@ def parse_dynamics(rows: list[list[str]]) -> dict:
         values = [v / 1e6 if v is not None else None for v in values]
         if not any(v for v in values):
             continue
-        if name.upper().startswith("ДОХОДЫ"):
+        if name.upper().startswith(("ДОХОДЫ", "INCOME")):
             total = values
-        elif not name.lower().startswith("в том числе"):
-            regions.append({"name": name, "values": values})
+        elif not name.lower().startswith(("в том числе", "including")):
+            regions.append({"name": region_name(name), "values": values})
     if not total:
         raise SourceError("в файле динамики нет строки «ДОХОДЫ, всего»")
+    populated = [index for index, value in enumerate(total) if value is not None]
+    if populated:
+        width = populated[-1] + 1
+        months = months[:width]
+        total = total[:width]
+        for region in regions:
+            region["values"] = region["values"][:width]
     return {"months": months, "total": total, "regions": regions}
 
 
+def dynamics_year(rows: list[list[str]]) -> int:
+    """Год из шапки книги: заголовок карточки gov.kz бывает неверен."""
+    text = " ".join(cell for row in rows[:4] for cell in row)
+    years = [int(value) for value in re.findall(r"(?<!\d)20\d{2}(?!\d)", text)]
+    if not years:
+        raise SourceError("в шапке файла динамики нет года")
+    return max(years)
+
+
+def fetch_dynamics_report(report: dict) -> dict:
+    doc_id = report.get("id") or "unknown"
+    url = KGD + report["document"]
+    raw = fetch_file(url, f"kgd_dynamics_{doc_id}.bin", max_age_days=30)
+    book = Workbook(raw)
+    if not book.sheets:
+        raise SourceError("в книге динамики нет листов")
+    rows = book.rows(book.sheets[0][1])
+    data = parse_dynamics(rows)
+    data["year"] = dynamics_year(rows)
+    data["period"] = f"{data['year']}-{len(data['months']):02d}"
+    data["source_url"] = KGD_STATS_PAGE
+    data["source_file_url"] = url
+    data["published"] = (report.get("created_date") or "")[:10]
+    return data
+
+
 def fetch_dynamics() -> dict:
-    """Свежий год помесячно плюс предыдущий: без базы сравнения график ни о чём."""
-    page = fetch_file(
-        DYNAMICS_PAGE, "kgd_dynamics_page.html", max_age_days=7, expect="page"
-    ).decode("utf-8", "ignore")
-    links = dynamics_links(page)
-    url, year = links[0]
-    raw = fetch_file(url, f"kgd_dynamics_{year}.bin", max_age_days=7)
-    data = parse_dynamics(Workbook(raw).rows("xl/worksheets/sheet1.xml"))
-    data["year"] = year
-    data["source_url"] = DYNAMICS_PAGE
-    data["previous"] = None
-    if len(links) > 1:
-        prev_url, prev_year = links[1]
+    """Свежий год помесячно; плохой свежий файл не закрывает предыдущие."""
+    reports = kgd_reports("dynamics")
+    skipped: list[str] = []
+    data = None
+    current_index = -1
+    for index, report in enumerate(reports[:8]):
         try:
-            prev_raw = fetch_file(prev_url, f"kgd_dynamics_{prev_year}.bin")
-            prev = parse_dynamics(Workbook(prev_raw).rows("xl/worksheets/sheet1.xml"))
-            prev["year"] = prev_year
-            data["previous"] = prev
+            data = fetch_dynamics_report(report)
+            current_index = index
+            break
+        except (SourceError, OSError) as exc:
+            skipped.append(f"{report.get('id', '?')} ({exc})")
+    if data is None:
+        raise SourceError(f"ни один файл динамики не разобрался: {'; '.join(skipped)}")
+    data["previous"] = None
+    for report in reports[current_index + 1 :]:
+        title_years = [
+            int(value)
+            for value in re.findall(
+                r"(?<!\d)20\d{2}(?!\d)", report.get("title") or ""
+            )
+        ]
+        if title_years and max(title_years) >= data["year"]:
+            continue
+        try:
+            previous = fetch_dynamics_report(report)
+            if previous["year"] < data["year"]:
+                data["previous"] = previous
+                break
         except (SourceError, OSError):
-            pass
+            continue
+    data["skipped"] = skipped
     return data
 
 
@@ -395,6 +546,12 @@ def summary_sheet(book: Workbook) -> str | None:
     по-разному («Республика в целом», «по Республике Казахстан»), поэтому ищется он
     по структуре: итог свода равен сумме остальных листов."""
     totals = [(path, sheet_total(book, path)) for _, path in book.sheets]
+    positive = [(path, value) for path, value in totals if value > 0]
+    # В новой форме КГД на листах органов нет колонки наименования,
+    # а полная раскладка есть только на одном сводном листе. Единственный
+    # структурно разбираемый итог безопасно считать сводом.
+    if len(positive) == 1:
+        return positive[0][0]
     grand = sum(v for _, v in totals)
     for path, value in totals:
         if value > 0 and abs(grand - 2 * value) / value < 0.01:
@@ -450,17 +607,71 @@ def period_matches(modified: str, year: int, month: int) -> bool:
     return start <= stamp <= f"{end_year}-{end_month:02d}"
 
 
+FACT_MONTHS = {
+    "январь": 1,
+    "февраль": 2,
+    "март": 3,
+    "апрель": 4,
+    "май": 5,
+    "июнь": 6,
+    "июль": 7,
+    "август": 8,
+    "сентябрь": 9,
+    "октябрь": 10,
+    "ноябрь": 11,
+    "декабрь": 12,
+    "january": 1,
+    "february": 2,
+    "march": 3,
+    "april": 4,
+    "may": 5,
+    "june": 6,
+    "july": 7,
+    "august": 8,
+    "september": 9,
+    "october": 10,
+    "november": 11,
+    "december": 12,
+}
+
+
+def fact_period(book: Workbook) -> tuple[int, int]:
+    """Отчётный период из шапки книги, а не из ненадёжного заголовка gov.kz."""
+    chunks: list[str] = []
+    for _, path in book.sheets[:4]:
+        chunks.extend(" ".join(row) for row in book.rows(path)[:3])
+    text = " ".join(chunks).lower()
+    years = [int(value) for value in re.findall(r"(?<!\d)20\d{2}(?!\d)", text)]
+    if not years:
+        raise SourceError("в шапке файла нет отчётного года")
+    numeric = re.findall(r"(?:за|for)\s+(\d{1,2})\s+(?:месяц|month)", text)
+    months = [FACT_MONTHS[name] for name in FACT_MONTHS if name in text]
+    if numeric:
+        months.extend(int(value) for value in numeric)
+    if re.search(r"(?:1|перв\w*|first)\s*(?:-й|st)?\s*(?:квартал|quarter)", text):
+        months.append(3)
+    if "первое полугодие" in text or "first half" in text:
+        months.append(6)
+    months = [month for month in months if 1 <= month <= 12]
+    if not months:
+        raise SourceError("в шапке файла нет отчётного месяца")
+    return max(years), max(months)
+
+
 def fetch_structure() -> dict:
-    page = fetch_file(
-        FACT_PAGE, "kgd_fact_page.html", max_age_days=7, expect="page"
-    ).decode("utf-8", "ignore")
     skipped: list[str] = []
     # Перебор идёт до первого разобравшегося месяца. Плохой файл выбывает сам:
-    # раньше на нём обрывался весь перебор, и пять следующих месяцев, которые
-    # могли разобраться, не пробовались вовсе.
-    for url, year, month in fact_links(page)[:6]:
+    # раньше на нём обрывался весь перебор, и следующие отчёты не пробовались.
+    for report in kgd_reports("fact")[:8]:
+        period_label = f"документ {report.get('id', '?')}"
         try:
-            book = Workbook(fetch_file(url, f"kgd_fact_{year}_{month:02d}.bin"))
+            doc_id = report.get("id") or "unknown"
+            url = KGD + report["document"]
+            book = Workbook(
+                fetch_file(url, f"kgd_fact_{doc_id}.bin", max_age_days=30)
+            )
+            year, month = fact_period(book)
+            period_label = f"{year}-{month:02d}"
             if not period_matches(book.modified, year, month):
                 skipped.append(f"{year}-{month:02d} (файл от {book.modified or '?'})")
                 continue
@@ -480,7 +691,7 @@ def fetch_structure() -> dict:
                 )
                 continue
         except (SourceError, OSError) as exc:
-            skipped.append(f"{year}-{month:02d} ({exc})")
+            skipped.append(f"{period_label} ({exc})")
             continue
         return {
             "period": f"{year}-{month:02d}",
@@ -489,8 +700,10 @@ def fetch_structure() -> dict:
             "items": items,
             "declared_total": round(declared, 2),
             "file_modified": book.modified,
+            "published": (report.get("created_date") or "")[:10],
             "skipped": skipped,
-            "source_url": FACT_PAGE,
+            "source_url": KGD_STATS_PAGE,
+            "source_file_url": url,
         }
     raise SourceError(f"ни один месячный файл не разобрался: {'; '.join(skipped)}")
 

@@ -76,6 +76,17 @@ def test_summary_absent_when_sheets_do_not_double():
     assert summary_sheet(book) is None
 
 
+def test_single_structured_sheet_is_summary_in_new_kgd_layout():
+    """В форме 2026 года только свод содержит колонку наименования."""
+    book = FakeBook({"72": [["text"]], "РК": org_sheet(3_000_000, 1_000_000)})
+    monkey = budget.sheet_total
+    try:
+        budget.sheet_total = lambda current, path: 4_000_000 if path == "path/РК" else 0
+        assert summary_sheet(book) == "path/РК"
+    finally:
+        budget.sheet_total = monkey
+
+
 def test_parse_fact_does_not_double_country():
     """Главный риск источника: свод плюс органы дают удвоенный бюджет страны."""
     items = parse_fact(book_with_summary())
@@ -152,6 +163,55 @@ def test_parse_dynamics_splits_total_and_regions():
     data = parse_dynamics(dynamics_rows())
     assert data["total"] == [3.0, 4.0, 5.0]
     assert [r["name"] for r in data["regions"]] == ["г.Алматы", "Акмолинская"]
+
+
+def test_parse_dynamics_accepts_english_and_trims_empty_future_months():
+    rows = [
+        ["Receipt of taxes for 2026"],
+        ["January", "February", "March", "April"],
+        ["INCOME, total", "1000000", "2000000", "", ""],
+        ["including:"],
+        ["DGD in Akmola region", "1000000", "2000000", "", ""],
+    ]
+    data = parse_dynamics(rows)
+    assert data["months"] == ["January", "February"]
+    assert data["total"] == [1.0, 2.0]
+    assert data["regions"][0] == {"name": "Акмолинская", "values": [1.0, 2.0]}
+    assert budget.dynamics_year(rows) == 2026
+
+
+def test_fact_period_comes_from_workbook_not_catalog_title():
+    book = FakeBook(
+        {"РК": [["КГД"], ["Налоговые поступления за январь-август 2026г."]]}
+    )
+    assert budget.fact_period(book) == (2026, 8)
+
+
+def test_catalog_replaces_redirected_legacy_pages():
+    reports = budget.kgd_reports(
+        "dynamics",
+        [
+            {
+                "id": 2,
+                "title": "Dynamics of revenues to the national fund for 2026",
+                "full_text": [{"document": "/national.xlsx"}],
+            },
+            {
+                "id": 1,
+                "title": "Dynamics of tax revenues and payments to the state budget for 2026",
+                "full_text": [{"document": "/budget.xlsx"}],
+            },
+        ],
+    )
+    assert [row["id"] for row in reports] == [1]
+
+
+def test_catalog_missing_required_section_is_explicit_error():
+    with pytest.raises(SourceError, match="нет xlsx"):
+        budget.kgd_reports(
+            "fact",
+            [{"title": "Actual revenues from taxes to state budget by region"}],
+        )
 
 
 def test_regions_sum_to_total():
@@ -349,14 +409,14 @@ def test_sheet_total_reports_unreadable_header():
 def test_fetch_structure_tries_next_month_after_bad_file(monkeypatch):
     """Раньше первый непонятый файл обрывал перебор, и пять следующих месяцев,
     которые могли разобраться, не пробовались."""
-    page = """
-    <tr><td>2025</td><td><a href="/a.xls">Май</a></td></tr>
-    <tr><td>2025</td><td><a href="/b.xls">Апрель</a></td></tr>
-    """
-    books = {"/a.xls": None, "/b.xls": book_with_summary()}
+    reports = [
+        {"id": 2, "document": "/a.xlsx", "created_date": "2025-06-01"},
+        {"id": 1, "document": "/b.xlsx", "created_date": "2025-05-01"},
+    ]
+    books = {budget.KGD + "/a.xlsx": None, budget.KGD + "/b.xlsx": book_with_summary()}
 
     def fake_fetch_file(url, name, max_age_days=7, expect="xlsx"):
-        return page.encode() if url == budget.FACT_PAGE else url.encode()
+        return url.encode()
 
     def fake_workbook(raw):
         book = books[raw.decode()]
@@ -366,6 +426,8 @@ def test_fetch_structure_tries_next_month_after_bad_file(monkeypatch):
 
     monkeypatch.setattr(budget, "fetch_file", fake_fetch_file)
     monkeypatch.setattr(budget, "Workbook", fake_workbook)
+    monkeypatch.setattr(budget, "kgd_reports", lambda kind: reports)
+    monkeypatch.setattr(budget, "fact_period", lambda book: (2025, 4))
     result = budget.fetch_structure()
     assert result["period"] == "2025-04"
-    assert any("2025-05" in s for s in result["skipped"])
+    assert any("документ 2" in s for s in result["skipped"])
