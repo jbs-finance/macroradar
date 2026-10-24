@@ -11,6 +11,7 @@ from __future__ import annotations
 import http.cookiejar
 import json
 import math
+import socket
 import ssl
 import sys
 import time
@@ -38,6 +39,9 @@ RETRY_PAUSE = 1.5  # база растущей паузы: 1.5, 3, 6 секун�
 MAX_BODY = 8 * 1024 * 1024
 
 WB_HOST = "https://api.worldbank.org/v2"
+WB_DNS_HOST = "api.worldbank.org"
+WB_DNS_ATTEMPTS = 6
+WB_DNS_MAX_PAUSE = 8.0
 NBK_HOST = "https://nationalbank.kz"
 
 # Реестр рядов. min/max это гейт правдоподобия, а не прогноз: значение за границей
@@ -223,6 +227,32 @@ def retriable(exc: Exception) -> bool:
 
 def backoff(attempt: int) -> None:
     time.sleep(RETRY_PAUSE * 2**attempt)
+
+
+def wait_for_worldbank_dns(
+    attempts: int = WB_DNS_ATTEMPTS, max_pause: float = WB_DNS_MAX_PAUSE
+) -> None:
+    """Один ограниченный DNS-гейт перед шестью рядами World Bank.
+
+    Короткая осечка DNS на раннере не должна шесть раз подряд мгновенно
+    выбивать все ряды. Пауза растёт, но и число попыток, и каждая пауза
+    ограничены; постоянный сбой остаётся явной ошибкой источника.
+    """
+    if attempts < 1:
+        raise ValueError("attempts должно быть не меньше 1")
+    last: OSError | None = None
+    for attempt in range(attempts):
+        try:
+            socket.getaddrinfo(WB_DNS_HOST, 443, type=socket.SOCK_STREAM)
+            return
+        except socket.gaierror as exc:
+            last = exc
+            if attempt == attempts - 1:
+                break
+            time.sleep(min(RETRY_PAUSE * 2**attempt, max_pause))
+    raise SourceError(
+        f"{WB_DNS_HOST}: DNS не разрешился за {attempts} попыток ({last})"
+    )
 
 
 def fetch(url: str, raw_name: str) -> bytes:
@@ -598,7 +628,18 @@ def build(dataset: Path = DATASET, today: date | None = None) -> dict:
             old["note"] = reason
             result.append(old)
 
+    try:
+        wait_for_worldbank_dns()
+        wb_dns_problem = None
+    except SourceError as exc:
+        wb_dns_problem = str(exc)
+
     for spec in WB_SERIES:
+        if wb_dns_problem:
+            keep_previous(
+                spec["series_id"], f"источник недоступен ({wb_dns_problem})"
+            )
+            continue
         try:
             series = fetch_worldbank(spec)
         except SourceError as exc:
