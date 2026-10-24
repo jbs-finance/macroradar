@@ -334,3 +334,11 @@ def test_cli_reports_both_categories_and_fails(sandbox: Path):
     assert "структура собрана неверно:" in run.stdout
     assert "наполнение неполное:" in run.stdout
     assert "нет <main>" in run.stdout
+
+
+def test_kgd_months_follow_reported_period():
+    from page_check import MIN_KGD_MONTHS, kgd_months_expected
+
+    assert kgd_months_expected({"dynamics": {"period": "2026-08"}}) == 8
+    assert kgd_months_expected({"dynamics": {"period": "2026-12"}}) == MIN_KGD_MONTHS
+    assert kgd_months_expected({"dynamics": {}}) == MIN_KGD_MONTHS

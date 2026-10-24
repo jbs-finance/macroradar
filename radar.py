@@ -56,6 +56,9 @@ RATE_MAX_AGE_DAYS = 180
 # то же число лежит текстом в информационном сообщении, поэтому берётся оттуда.
 # Значение выше 50 означает расширение активности, ниже 50 сжатие.
 BAI_NEWS = f"{NBK_HOST}/ru/news/informacionnye-soobshcheniya"
+BAI_NEWS_PAGED = f"{BAI_NEWS}/rubrics/2313?page="
+BAI_PAGES = 4
+CALENDAR_SIZE = 14
 BAI_NEUTRAL = 50.0
 BAI_MAX_AGE_DAYS = 100
 # Секторы опроса ИДА. Ключ это основа слова: в тексте встречаются разные падежи.
@@ -444,10 +447,16 @@ def fetch_upcoming(
     except SourceError as exc:
         problems.append(f"календарь релизов, текущий месяц: {exc}")
     ny, nm = (today.year, today.month + 1) if today.month < 12 else (today.year + 1, 1)
-    try:
-        events.extend(fetch_calendar_day(date(ny, nm, 1)))
-    except SourceError as exc:
-        problems.append(f"календарь релизов, {ny}-{nm:02d}: {exc}")
+    # Календарь отдаёт события по одному дню, а первое число часто выходной. Идём
+    # по дням следующего месяца, пока не наберём блок целиком.
+    for day in range(1, 29):
+        if sum(date.fromisoformat(e["date"]) >= today for e in events) >= CALENDAR_SIZE:
+            break
+        try:
+            events.extend(fetch_calendar_day(date(ny, nm, day)))
+        except SourceError as exc:
+            problems.append(f"календарь релизов, {ny}-{nm:02d}-{day:02d}: {exc}")
+            break
 
     upcoming = [
         {**e, "kind": "stat"} for e in events if date.fromisoformat(e["date"]) >= today
@@ -731,10 +740,17 @@ def parse_business_activity(markup: str) -> dict:
 def fetch_business_activity() -> tuple[dict | None, list[str]]:
     """Свежее сообщение об ИДА из ленты информационных сообщений НБРК."""
     problems: list[str] = []
-    try:
-        listing = fetch(BAI_NEWS, "bai_listing.html").decode("utf-8", "ignore")
-    except SourceError as exc:
-        return None, [f"ИДА: лента недоступна ({exc})"]
+    # На странице ленты 10 сообщений, ИДА за прошлый месяц уходит на вторую-третью
+    # страницу за пару недель. В CI прошлого снапшота нет, поэтому листаем.
+    pages = [BAI_NEWS] + [f"{BAI_NEWS_PAGED}{n}" for n in range(2, BAI_PAGES + 1)]
+    listing = ""
+    for n, url in enumerate(pages, 1):
+        try:
+            listing += fetch(url, f"bai_listing_{n}.html").decode("utf-8", "ignore")
+        except SourceError as exc:
+            if n == 1:
+                return None, [f"ИДА: лента недоступна ({exc})"]
+            problems.append(f"ИДА: страница ленты {n} недоступна ({exc})")
 
     seen: set[str] = set()
     for href, num, raw_title in re.findall(
@@ -1077,7 +1093,7 @@ def build(
         "series": series_out,
         "inflation": points,
         "next_rate_decision": next_rate,
-        "calendar": calendar[:14],
+        "calendar": calendar[:CALENDAR_SIZE],
         "neighbours": neighbours,
         "business_activity": bai,
         "events": events[:12],
