@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from collections.abc import Callable
 from dataclasses import asdict
 from datetime import date
@@ -64,6 +65,8 @@ REGIONS: list[tuple[str, str, str]] = [
 ]
 
 GAP_VALUES = (None, "", "-", "x")
+SEMANTIC_RETRIES = 3
+SEMANTIC_RETRY_PAUSE = 1.5
 
 
 def dump_url(spec: dict) -> str:
@@ -117,6 +120,19 @@ def places_of(spec: dict) -> list[tuple[str, str, str]]:
     return spec.get("places", REGIONS)
 
 
+def response_is_incomplete(rows: dict[str, list[dict]], spec: dict) -> bool:
+    """Отличить целиком выпавший разрез от отдельных дыр источника.
+
+    Taldau иногда возвращает корректный JSON полного дампа, в котором временно
+    отсутствует одна категория для всех областей. Сетевые и JSON-ретраи такой
+    ответ не замечают. Повторяем запрос, только если найдено меньше половины
+    ожидаемых областей; одиночные пропуски по-прежнему обрабатываются отдельно.
+    """
+    expected = {term for term, _name, _slug in places_of(spec)}
+    present = expected.intersection(rows)
+    return len(present) < max(1, (len(expected) + 1) // 2)
+
+
 def build(
     specs: list[dict],
     prefix: str,
@@ -142,14 +158,28 @@ def build(
     for spec in specs:
         url = dump_url(spec)
         try:
-            if url not in dumps:
-                dumps[url] = fetcher(
-                    url,
-                    raw_name=f"{prefix}_{spec['series_key']}.json",
-                    headers=TALDAU_HEADERS,
-                    max_body=spec.get("max_body", MAX_BODY),
+            for attempt in range(SEMANTIC_RETRIES):
+                if url not in dumps or attempt:
+                    dumps[url] = fetcher(
+                        url,
+                        raw_name=f"{prefix}_{spec['series_key']}.json",
+                        headers=TALDAU_HEADERS,
+                        max_body=spec.get("max_body", MAX_BODY),
+                    )
+                rows, ambiguous = pick_rows(dumps[url], spec)
+                if not response_is_incomplete(rows, spec):
+                    break
+                if attempt < SEMANTIC_RETRIES - 1:
+                    time.sleep(SEMANTIC_RETRY_PAUSE * 2**attempt)
+            else:
+                expected = len(places_of(spec))
+                present = len(
+                    {term for term, _name, _slug in places_of(spec)}.intersection(rows)
                 )
-            rows, ambiguous = pick_rows(dumps[url], spec)
+                raise SourceError(
+                    f"{spec['index_id']}: неполный ответ по {spec['series_key']}: "
+                    f"регионов {present} из {expected} после {SEMANTIC_RETRIES} попыток"
+                )
         except SourceError as exc:
             for _term, _name, slug in places_of(spec):
                 fallback(f"{prefix}.{spec['series_key']}.{slug}", str(exc))
