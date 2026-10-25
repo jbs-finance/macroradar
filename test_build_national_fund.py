@@ -1,4 +1,4 @@
-from build_national_fund import build, count_text, return_bars, table_rows
+from build_national_fund import asset_chart, build, count_text, return_bars, table_rows
 
 
 def dataset():
@@ -30,16 +30,18 @@ def test_page_has_canonical_sources_and_honest_availability_note():
     assert "66,12" in page
     assert "Источники и методология" in page
     assert "Операции и трансферты" in page
-    assert "Структура Национального фонда" in page
+    assert "Как вложены средства Нацфонда" in page
     assert "Альтернативные инструменты" in page
     assert "Международные резервы НБК" in page
-    assert "Пенсионные активы ЕНПФ" in page
-    assert "Сводная сумма" in page and "не считается" in page
+    assert "Пенсионные средства граждан" in page
     assert "Общая сумма для них не рассчитывается" in page
     assert "после учёта обязательств" in page
     assert 'href="https://nationalbank.kz/assets"' in page
     assert page.index('id="enpf"') < page.index('id="availability-title"')
-    assert page.index('id="map-title"') < page.index("Национальный фонд: объём и результат")
+    assert page.index('id="map-title"') < page.index('id="national-fund-title"')
+    assert "Три пула, три задачи" in page
+    assert page.index('id="children"') < page.index('id="reserves"') < page.index('id="enpf"')
+    assert "Пенсионные средства граждан" in page
     assert "$66,12" in page
     main_story = page[: page.index('id="availability-title"')]
     assert " млрд USD" not in main_story
@@ -52,9 +54,10 @@ def test_trends_share_one_section_but_keep_units_and_scales_separate():
     assert "Месячный ряд НБРК" in page
     assert "Годовая доходность, %" in page
     assert "Годовые точки" not in page
-    assert "Точные годовые значения" in page
-    assert "2026 (июль)" in page
-    assert 'role="img" aria-label="2017: плюс 7,6 процента"' in page
+    assert "Точные годовые значения" not in page
+    assert "июль 2026" in page
+    assert 'role="img" aria-label="2017 год: плюс 7,6 процента"' in page
+    assert ">+7,6%</span>" in page
 
 
 def test_return_chart_preserves_negative_sign_and_uses_its_own_scale():
@@ -67,8 +70,29 @@ def test_return_chart_preserves_negative_sign_and_uses_its_own_scale():
 
 def test_incomplete_year_names_the_latest_month_in_exact_table():
     rows = table_rows(dataset()["assets"], dataset()["returns"])
-    assert "2026 (июль)" in rows
-    assert "2025 (декабрь)" not in rows
+    assert "июль 2026" in rows
+    assert "декабрь 2025" not in rows
+
+
+def test_asset_chart_labels_three_keyboard_focusable_anchor_points():
+    chart = asset_chart(dataset()["assets"])
+    assert chart.count('class="spark-anchor"') == 3
+    assert chart.count('tabindex="0"') == 3
+    assert "сентябрь 2016" in chart
+    assert "декабрь 2017" in chart
+    assert "июль 2026" in chart
+    assert "$64,54" in chart and "$57,70" in chart and "$66,12" in chart
+
+
+def test_visible_dates_are_human_readable_and_unambiguous():
+    page = build(dataset())
+    story = page[: page.index('id="availability-title"')]
+    assert "июль 2026" in story
+    assert "30 сентября 2026" in story
+    assert "1 октября 2026" in story
+    assert "2026-07" not in story
+    assert "30.09.2026" not in story
+    assert "01.10.2026" not in story
 
 
 def test_page_marks_saved_data_without_removing_it():

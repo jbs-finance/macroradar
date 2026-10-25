@@ -153,7 +153,7 @@ def test_sections_stripped_from_page_are_caught(sandbox: Path):
 def test_new_asset_block_removed_from_page_is_caught(sandbox: Path):
     document = read(sandbox, "national-fund/index.html")
     stripped = re.sub(
-        r'<section class="asset-section" id="children".*?</section>',
+        r'<section class="children-subsection" id="children".*?</section>',
         "",
         document,
         count=1,
@@ -164,18 +164,17 @@ def test_new_asset_block_removed_from_page_is_caught(sandbox: Path):
     assert any("Нацфонд — детям" in line for line in found), found
 
 
-def test_integrated_annual_values_removed_from_page_are_caught(sandbox: Path):
+def test_chart_anchor_values_removed_from_page_are_caught(sandbox: Path):
     document = read(sandbox, "national-fund/index.html")
     stripped = re.sub(
-        r'<details class="trend-details".*?</details>',
+        r'<g class="spark-anchor".*?</g>',
         "",
         document,
-        count=1,
         flags=re.S,
     )
     write(sandbox, "national-fund/index.html", stripped)
     found = fresh(sandbox)
-    assert any("точные годовые значения" in line for line in found), found
+    assert any("опорные точки графика" in line for line in found), found
 
 
 def test_collapsed_regions_in_dump_are_caught(sandbox: Path):

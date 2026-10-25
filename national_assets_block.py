@@ -12,6 +12,9 @@ BLOCK_STYLE = """
 .asset-section > header { max-width: 780px; margin-bottom: 1.25rem; }
 .asset-section h2 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: clamp(1.55rem, 3vw, 2.15rem); letter-spacing: -0.025em; }
 .asset-section h3 { margin: 1.65rem 0 0.45rem; font-size: 1.05rem; }
+.children-subsection { margin-top: 2.5rem; padding: clamp(1rem, 3vw, 1.5rem); background: #FAF4EA; border-left: 4px solid #C98C45; }
+.children-subsection h3 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: clamp(1.35rem, 2.5vw, 1.8rem); }
+.children-subsection > .section-note { max-width: 760px; }
 .eyebrow { margin: 0 0 0.55rem; color: var(--muted-fg); font-size: 0.76rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; }
 .scope-note { padding: 0.85rem 1rem; color: var(--muted-fg); line-height: 1.5; background: #FAF4EA; border-left: 3px solid #C98C45; }
 .metric-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--muted); border: 1px solid var(--muted); }
@@ -81,7 +84,11 @@ def _billions(value: float | int, decimals: int = 2) -> str:
 
 def _date(value: str) -> str:
     year, month, day = value.split("-")
-    return f"{day}.{month}.{year}"
+    months = (
+        "", "января", "февраля", "марта", "апреля", "мая", "июня",
+        "июля", "августа", "сентября", "октября", "ноября", "декабря",
+    )
+    return f"{int(day)} {months[int(month)]} {year}"
 
 
 def _source(url: str) -> str:
@@ -196,66 +203,97 @@ def build_assets_blocks(disclosure: dict) -> str:
     )
 
 
+def build_assets_methodology(disclosure: dict) -> str:
+    disclosure = validate_disclosures(disclosure)
+    fund = disclosure["national_fund"]
+    annual = fund["annual_2025"]
+    domestic = fund["domestic_monthly"]
+    enpf = disclosure["enpf"]
+    main = enpf["nbk_managed"]
+    domestic_rate = float(disclosure["fx_rates"][domestic["as_of"]]["kzt_per_usd"])
+    enpf_rate = float(disclosure["fx_rates"][main["as_of"]]["kzt_per_usd"])
+    return METHODOLOGY_TEMPLATE.format(
+        annual_date=_date(annual["as_of"]),
+        gross=_billions(annual["gross_foreign_portfolios"]),
+        claims=_billions(annual["children_claims"]),
+        net=_billions(annual["net_foreign_assets"]),
+        domestic_total=_billions(annual["domestic_securities_usd_equivalent"] + annual["domestic_cash_usd_equivalent"]),
+        total=_billions(annual["total_market_value"]),
+        domestic_date=_date(domestic["as_of"]),
+        debt_nominal=fmt_num(kzt_billions_to_usd_billions(domestic["debt_nominal"], domestic_rate), 2),
+        debt_fair=fmt_num(kzt_billions_to_usd_billions(domestic["debt_fair_value"], domestic_rate), 2),
+        equity_cost=fmt_num(kzt_billions_to_usd_billions(domestic["equity_cost"], domestic_rate), 2),
+        equity_fair=fmt_num(kzt_billions_to_usd_billions(domestic["equity_fair_value"], domestic_rate), 2),
+        cash=fmt_num(kzt_billions_to_usd_billions(domestic["cash"], domestic_rate), 2),
+        enpf_date=_date(main["as_of"]),
+        enpf_rows=_enpf_rows(main["components"], enpf_rate),
+        enpf_total=fmt_num(kzt_billions_to_usd_billions(main["total"], enpf_rate), 2),
+    )
+
+
 TEMPLATE = """
 <section class="asset-section" id="fund-structure" aria-labelledby="fund-structure-title">
-  <header><p class="eyebrow">Владелец: Республика Казахстан · управление: НБК</p><h2 id="fund-structure-title">Структура Национального фонда</h2><p class="section-note">Последнее полное годовое раскрытие на {annual_date}. Оно не выдаётся за структуру сентября 2026 года. Срез проверен {verified}.</p></header>
-  <p class="scope-note">Диаграмма показывает валовые валютные портфели на ${gross} млрд. Золото уже входит в сберегательный портфель. Названия отражают инвестиционные мандаты. Они не определяют тип каждого эмитента.</p>
-  <figure aria-labelledby="fund-composition-title"><figcaption id="fund-composition-title" class="eyebrow">Состав валовых валютных портфелей</figcaption><div class="bars">{composition}</div></figure>
-  <h3>Как складывается итог на {annual_date}</h3>
-  <table class="reconcile" aria-label="Сверка годового итога Национального фонда"><tbody>
-    <tr><th>Валовые валютные портфели</th><td>${gross} млрд</td></tr>
-    <tr><th>Обязательства по целевым требованиям<small>Средства, начисленные участникам программы «Нацфонд — детям»</small></th><td>(${claims}) млрд</td></tr>
-    <tr class="subtotal"><th>Валютные активы после учёта обязательств</th><td>${net} млрд</td></tr>
-    <tr><th>Тенговые бумаги и остаток денег</th><td>${domestic_total} млрд</td></tr>
-    <tr class="total"><th>Рыночная стоимость активов</th><td>${total} млрд</td></tr>
-  </tbody></table>
-  <h3>Тенговые активы: оценки на {domestic_date}</h3>
-  <p class="scope-note">Номинал, стоимость приобретения и справедливая стоимость дают разные оценки одних активов. Складывать их нельзя. Пересчёт выполнен по курсу {domestic_rate} тенге за $1 на дату среза.</p>
-  <div class="valuation-grid">
-    <article class="valuation-card"><strong>Долговые инструменты</strong><dl><dt>Номинал</dt><dd>${debt_nominal} млрд</dd><dt>Справедливая стоимость</dt><dd>${debt_fair} млрд</dd></dl></article>
-    <article class="valuation-card"><strong>Долевые инструменты</strong><dl><dt>Стоимость приобретения</dt><dd>${equity_cost} млрд</dd><dt>Справедливая стоимость</dt><dd>${equity_fair} млрд</dd><dt>Остаток денег</dt><dd>${cash} млрд</dd></dl></article>
-  </div>
-</section>
+  <header><p class="eyebrow">Государственные средства · управление НБК</p><h2 id="fund-structure-title">Как вложены средства Нацфонда</h2><p class="section-note">Последняя полная структура опубликована на {annual_date}. Более свежий месячный выпуск сообщает общий объём, но не обновляет эту разбивку.</p></header>
+  <p class="scope-note">Валютные портфели составляли ${gross} млрд. Золото уже входит в эту сумму. Полная сверка и правила оценки находятся в методике внизу страницы.</p>
+  <figure aria-labelledby="fund-composition-title"><figcaption id="fund-composition-title" class="eyebrow">Состав валютных портфелей</figcaption><div class="bars">{composition}</div></figure>
 
-<section class="asset-section" id="children" aria-labelledby="children-title">
-  <header><p class="eyebrow">Участники: дети, граждане Казахстана · оператор учёта: ЕНПФ</p><h2 id="children-title">Программа «Нацфонд — детям»</h2><p class="section-note">Здесь показаны два этапа учёта средств. Даты различаются, поэтому общего остатка нет.</p></header>
-  <div class="metric-grid">
-    <article class="metric metric--main"><p class="label">Средства, начисленные детям</p><p class="number">${child_claims}</p><p class="note">млрд на {child_claims_date}. Официальный термин НБК: обязательства по целевым требованиям.</p></article>
-    <article class="metric"><p class="label">Целевые накопления в ЕНПФ</p><p class="number">${child_savings}</p><p class="note">млн на {child_savings_date}. Это следующий этап учёта и другая дата.</p></article>
-    <article class="metric"><p class="label">Сводная сумма</p><p class="number">не считается</p><p class="note">два показателя относятся к разным датам и стадиям программы</p></article>
-  </div>
-  <div class="flow-grid" aria-label="Исторические потоки программы">
-    <div class="flow">Начислено с начала программы, приблизительно<strong>≈ ${child_accrual} млрд</strong><span class="section-note">накопленный поток; текущий остаток считается отдельно</span></div>
-    <div class="flow">Выплачено к 01.10.2026<strong>${child_payout} млн</strong><span class="section-note">накопленный поток; текущий остаток считается отдельно</span></div>
-  </div>
+  <section class="children-subsection" id="children" aria-labelledby="children-title">
+    <p class="eyebrow">Часть Национального фонда</p><h3 id="children-title">Программа «Нацфонд — детям»</h3>
+    <p class="section-note">Каждому ребёнку начисляют долю инвестиционного дохода Нацфонда. Сначала сумма учитывается внутри фонда. После достижения совершеннолетия она переходит на целевой счёт в ЕНПФ. Даты этих двух стадий различаются.</p>
+    <div class="metric-grid">
+      <article class="metric metric--main"><p class="label">Начислено детям внутри Нацфонда</p><p class="number">${child_claims}</p><p class="note">млрд на {child_claims_date}</p></article>
+      <article class="metric"><p class="label">Переведено на целевые счета ЕНПФ</p><p class="number">${child_savings}</p><p class="note">млн на {child_savings_date}</p></article>
+      <article class="metric"><p class="label">Почему суммы не складываются</p><p class="number">2 стадии</p><p class="note">средства переходят из Нацфонда в учёт ЕНПФ</p></article>
+    </div>
+    <div class="flow-grid" aria-label="Исторические потоки программы">
+      <div class="flow">Начислено с запуска программы, приблизительно<strong>≈ ${child_accrual} млрд</strong><span class="section-note">накопленный поток</span></div>
+      <div class="flow">Выплачено к {child_savings_date}<strong>${child_payout} млн</strong><span class="section-note">накопленный поток</span></div>
+    </div>
+  </section>
 </section>
 
 <section class="asset-section" id="reserves" aria-labelledby="reserves-title">
-  <header><p class="eyebrow">Владелец и управление: Национальный банк Казахстана</p><h2 id="reserves-title">Международные резервы НБК</h2><p class="section-note">Предварительный остаток на {reserves_date}. Резервы НБК учитываются отдельно от Нацфонда. Их нельзя считать свободными деньгами бюджета.</p></header>
+  <header><p class="eyebrow">Средства Национального банка Казахстана</p><h2 id="reserves-title">Международные резервы НБК</h2><p class="section-note">Резервы помогают проводить внешние платежи и поддерживать устойчивость финансовой системы. Это отдельный пул. Он не входит в Нацфонд и не относится к пенсионным средствам.</p></header>
   <div class="metric-grid">
-    <article class="metric metric--main"><p class="label">Валовые резервы</p><p class="number">${reserves_gross}</p><p class="note">млрд</p></article>
-    <article class="metric"><p class="label">Чистые резервы</p><p class="number">${reserves_net}</p><p class="note">млрд</p></article>
-    <article class="metric"><p class="label">Статус</p><p class="number">предв.</p><p class="note">компоненты округлены до $1 млн</p></article>
+    <article class="metric metric--main"><p class="label">Валовые резервы</p><p class="number">${reserves_gross}</p><p class="note">млрд на {reserves_date}; предварительные данные</p></article>
+    <article class="metric"><p class="label">Монетарное золото</p><p class="number">${reserves_gold}</p><p class="note">млрд, {gold_share}% валовых резервов</p></article>
+    <article class="metric"><p class="label">Средства в иностранной валюте</p><p class="number">${reserves_fx}</p><p class="note">млрд, {fx_share}% валовых резервов</p></article>
   </div>
-  <figure aria-labelledby="reserves-chart"><figcaption id="reserves-chart" class="eyebrow">Состав валовых резервов</figcaption><div class="bars">
+  <figure aria-labelledby="reserves-chart"><figcaption id="reserves-chart" class="eyebrow">Из чего состоят валовые резервы</figcaption><div class="bars">
     <div class="bar-row"><span class="bar-label">Монетарное золото</span><span class="bar-track" aria-hidden="true"><span class="bar-fill" style="width:{gold_width:.4f}%"></span></span><span class="bar-value">${reserves_gold} млрд · {gold_share}%</span></div>
-    <div class="bar-row bar-row--muted"><span class="bar-label">Свободно конвертируемая валюта</span><span class="bar-track" aria-hidden="true"><span class="bar-fill" style="width:{fx_width:.4f}%"></span></span><span class="bar-value">${reserves_fx} млрд · {fx_share}%</span></div>
+    <div class="bar-row bar-row--muted"><span class="bar-label">Иностранная валюта</span><span class="bar-track" aria-hidden="true"><span class="bar-fill" style="width:{fx_width:.4f}%"></span></span><span class="bar-value">${reserves_fx} млрд · {fx_share}%</span></div>
   </div></figure>
-  <p class="section-note">Сумма компонентов отличается от валового итога на $1 млн из-за округления.</p>
 </section>
 
 <section class="asset-section" id="enpf" aria-labelledby="enpf-title">
-  <header><p class="eyebrow">Владельцы: вкладчики ЕНПФ · управление показанного пула: НБК</p><h2 id="enpf-title">Пенсионные активы ЕНПФ</h2><p class="section-note">Основной график охватывает ОПВ, ОППВ и ДПВ под управлением НБК на {enpf_date}. Другие пулы показаны ниже.</p></header>
+  <header><p class="eyebrow">Личные средства вкладчиков ЕНПФ</p><h2 id="enpf-title">Пенсионные средства граждан</h2><p class="section-note">Эти деньги принадлежат вкладчикам. Здесь показан основной портфель под управлением НБК на {enpf_date}. Он не является государственным резервом.</p></header>
   <div class="metric-grid">
-    <article class="metric metric--main"><p class="label">Портфель под управлением НБК</p><p class="number">${enpf_total}</p><p class="note">млрд; ОПВ / ОППВ / ДПВ</p></article>
-    <article class="metric"><p class="label">Дата и курс</p><p class="number">{enpf_date}</p><p class="note">{enpf_rate} тенге за $1</p></article>
-    <article class="metric"><p class="label">Охват</p><p class="number">основной пул</p><p class="note">ОПВР и частные управляющие показаны отдельно</p></article>
+    <article class="metric metric--main"><p class="label">Основной портфель под управлением НБК</p><p class="number">${enpf_total}</p><p class="note">млрд пенсионных средств вкладчиков</p></article>
+    <article class="metric"><p class="label">Дополнительный обязательный пул</p><p class="number">${opvr_total}</p><p class="note">млрд; учитывается отдельно как ОПВР</p></article>
+    <article class="metric"><p class="label">Под частным управлением</p><p class="number">${private_managers}</p><p class="note">млрд; отдельный пул</p></article>
   </div>
-  <figure aria-labelledby="enpf-chart"><figcaption id="enpf-chart" class="eyebrow">Шесть крупнейших строк портфеля</figcaption><div class="bars">{enpf_bars}</div></figure>
-  <div class="separate-pools" aria-label="Отдельные пулы ЕНПФ">
-    <div class="pool">ОПВР, включая взносный счёт<strong>${opvr_total} млрд</strong><span class="section-note">из них под управлением ${opvr_managed} млрд</span></div>
-    <div class="pool">Частные управляющие<strong>${private_managers} млрд</strong><span class="section-note">отдельный пул; в основной график не входит</span></div>
-  </div>
-  <details><summary>Все строки портфеля и сверка итога</summary><div class="details-body"><table class="data-table"><thead><tr><th>Категория</th><th>$ млрд</th></tr></thead><tbody>{enpf_rows}</tbody><tfoot><tr><th>Итого</th><th>${enpf_total}</th></tr></tfoot></table><p>Индексное управление уже входит в итог. Внешнее управление тоже учитывается внутри портфеля и не образует дополнительный актив.</p></div></details>
+  <figure aria-labelledby="enpf-chart"><figcaption id="enpf-chart" class="eyebrow">Крупнейшие вложения основного портфеля</figcaption><div class="bars">{enpf_bars}</div></figure>
 </section>
+"""
+
+METHODOLOGY_TEMPLATE = """
+<h4>Сверка Нацфонда на {annual_date}</h4>
+<table class="reconcile" aria-label="Сверка годового итога Национального фонда"><tbody>
+  <tr><th>Валовые валютные портфели</th><td>${gross} млрд</td></tr>
+  <tr><th>Обязательства по целевым требованиям программы «Нацфонд — детям»</th><td>(${claims}) млрд</td></tr>
+  <tr class="subtotal"><th>Валютные активы после учёта обязательств</th><td>${net} млрд</td></tr>
+  <tr><th>Тенговые бумаги и остаток денег</th><td>${domestic_total} млрд</td></tr>
+  <tr class="total"><th>Рыночная стоимость активов</th><td>${total} млрд</td></tr>
+</tbody></table>
+<h4>Оценки тенговых активов на {domestic_date}</h4>
+<p>Номинал, стоимость приобретения и справедливая стоимость описывают разные оценки одних активов. Их не складывают.</p>
+<div class="valuation-grid">
+  <article class="valuation-card"><strong>Долговые инструменты</strong><dl><dt>Номинал</dt><dd>${debt_nominal} млрд</dd><dt>Справедливая стоимость</dt><dd>${debt_fair} млрд</dd></dl></article>
+  <article class="valuation-card"><strong>Долевые инструменты</strong><dl><dt>Стоимость приобретения</dt><dd>${equity_cost} млрд</dd><dt>Справедливая стоимость</dt><dd>${equity_fair} млрд</dd><dt>Остаток денег</dt><dd>${cash} млрд</dd></dl></article>
+</div>
+<h4>Все строки основного портфеля ЕНПФ на {enpf_date}</h4>
+<table class="data-table"><thead><tr><th>Категория</th><th>$ млрд</th></tr></thead><tbody>{enpf_rows}</tbody><tfoot><tr><th>Итого</th><th>${enpf_total}</th></tr></tfoot></table>
+<p>Индексное управление и внешнее управление уже входят в итог. ОПВР и средства под частным управлением показаны как отдельные пулы.</p>
+<h4>Как учитывается программа «Нацфонд — детям»</h4>
+<p>В Нацфонде показатель называется обязательствами по целевым требованиям. После перечисления в ЕНПФ он становится целевым накоплением участника. Значения относятся к разным датам и стадиям, поэтому общий остаток не рассчитывается.</p>
 """
