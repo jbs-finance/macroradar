@@ -39,3 +39,17 @@
   `#portfolio-title`. Данные и все stale-гейты прошли; публичная версия этим
   запуском не изменялась. Контракт заменён проверками каждого из четырёх новых
   блоков, добавлен регрессионный тест удаления блока.
+- исправление контракта страницы: commit
+  `5616d215c41a9c884f86187f7b84b227123c3ab2`,
+  PR <https://github.com/jbs-finance/macroradar/pull/10>, merge commit
+  `c3c9d2af4d1c7d430fa0b0f30dda8183145f2fd7`;
+- production run <https://github.com/jbs-finance/macroradar/actions/runs/40182673821>
+  завершён успешно 25.10.2026 в 10:03 UTC: прошли сборщики, stale-гейты,
+  `page_check`, тесты Worker, изолированная сборка Pages, публикация, deploy
+  Worker и публичный smoke-test;
+- публичная страница <https://jbs.finance/macroradar/national-fund/> и
+  `data.json` повторно проверены 25.10.2026 после deploy: HTTP 200, upstream
+  `jbs-macroradar-pages`, четыре новых блока присутствуют. Месячный ряд
+  Национального фонда заканчивается сентябрём 2026 года (66,653 млрд USD,
+  `assets_stale=false`), срезы раскрытий датированы 31.12.2025, 30.09.2026,
+  01.02.2026 и 01.10.2026 в соответствии с первоисточниками.
