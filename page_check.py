@@ -384,6 +384,7 @@ class Section:
     items: int = 0
     links: int = 0
     entries: int = 0
+    anchors: int = 0
 
 
 SECTIONS = {
@@ -404,15 +405,15 @@ SECTIONS = {
         Section("Структура торговли", "структура торговли", items=30),
     ),
     "national-fund": (
-        Section("#map-title", "карта активов", numbers=4, links=4),
+        Section("#map-title", "карта активов", numbers=3, links=3),
         Section(".fund-summary", "ключевые показатели фонда", numbers=3),
         Section("#assets-title", "динамика фонда", charts=1, numbers=10),
-        Section(".trend-details", "точные годовые значения", rows=8),
-        Section("#fund-structure", "структура Нацфонда", numbers=12),
-        Section("#children", "Нацфонд — детям", numbers=4),
+        Section(".spark", "опорные точки графика", anchors=3),
+        Section("#fund-structure", "структура Нацфонда", numbers=10),
+        Section("#children", "Нацфонд — детям", numbers=5),
         Section("#reserves", "резервы НБК", numbers=6),
-        Section("#enpf", "пенсионные активы ЕНПФ", numbers=12, rows=10),
-        Section("#availability-title", "источники и методология", items=3, links=2),
+        Section("#enpf", "пенсионные средства граждан", numbers=12),
+        Section("#availability-title", "источники и методология", items=3, links=2, rows=18),
     ),
     "budget": (
         Section("Сколько собирают на самом деле", "поступления", numbers=8, charts=1),
@@ -543,6 +544,7 @@ def measure(region: list[Node]) -> dict[str, int]:
         "items": sum(1 for n in nodes if n.tag in ("li", "dd")),
         "links": sum(1 for n in nodes if n.tag == "a"),
         "entries": sum(1 for n in nodes if is_entry(n)),
+        "anchors": sum(1 for n in nodes if "spark-anchor" in n.classes),
         "text": len(text.strip()),
     }
 
@@ -566,6 +568,7 @@ KIND_NAMES = {
     "items": "пунктов списка",
     "links": "ссылок",
     "entries": "строк разбивки",
+    "anchors": "опорных точек графика",
 }
 
 

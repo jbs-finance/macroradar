@@ -3,7 +3,7 @@ import copy
 import pytest
 
 from etl import SourceError
-from national_assets_block import build_assets_blocks, kzt_billions_to_usd_billions
+from national_assets_block import build_assets_blocks, build_assets_methodology, kzt_billions_to_usd_billions
 from sovereign_assets import load_disclosures, validate_disclosures
 
 
@@ -58,18 +58,18 @@ def test_different_dates_and_valuations_cannot_silently_collapse():
 
 def test_rendered_blocks_expose_owner_date_unit_and_no_false_total():
     page = build_assets_blocks(load_disclosures())
-    assert "Владелец: Республика Казахстан" in page
-    assert "Владелец и управление: Национальный банк Казахстана" in page
-    assert "Владельцы: вкладчики ЕНПФ" in page
-    assert "31.12.2025" in page and "30.09.2026" in page and "01.10.2026" in page
+    assert "Государственные средства" in page
+    assert "Средства Национального банка Казахстана" in page
+    assert "Личные средства вкладчиков ЕНПФ" in page
+    assert "31 декабря 2025" in page and "30 сентября 2026" in page and "1 октября 2026" in page
     assert "$" in page
     assert " USD" not in page and " KZT" not in page
-    assert "накопленный поток; текущий остаток считается отдельно" in page
-    assert "Другие пулы показаны ниже" in page
-    assert "Сводная сумма" in page
-    assert "Индексное управление уже входит в итог" in page
-    assert "Средства, начисленные детям" in page
-    assert "обязательства по целевым требованиям" in page
+    assert page.count("накопленный поток") == 2
+    assert "Пенсионные средства граждан" in page
+    assert "Часть Национального фонда" in page
+    assert "Начислено детям внутри Нацфонда" in page
+    assert "Переведено на целевые счета ЕНПФ" in page
+    assert "обязательства по целевым требованиям" not in page
     assert "минус требования детей" not in page
     assert "равно чистые валютные активы" not in page
 
@@ -94,10 +94,14 @@ def test_main_money_cards_and_charts_use_dollar_sign_before_numbers():
     page = build_assets_blocks(load_disclosures())
     assert "$65,39 млрд" in page
     assert "$60,41" in page
-    assert "$7,69 млрд" in page
     assert "$161,06" in page and "млн" in page
     assert "млрд USD" not in page
     assert "млрд KZT" not in page
+
+    method = build_assets_methodology(load_disclosures())
+    assert "$7,69 млрд" in method
+    assert "31 декабря 2025" in method
+    assert "обязательства по целевым требованиям" in method.lower()
 
 
 def test_bar_layout_uses_one_shared_grid_and_mobile_reflows_without_fixed_tracks():
