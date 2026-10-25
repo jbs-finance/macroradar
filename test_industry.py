@@ -106,16 +106,18 @@ def test_permanently_missing_category_still_fails_hard(monkeypatch, tmp_path):
         row for row in by_index["701625"] if row["terms"][1] != 3078703
     ]
     calls: dict[str, int] = {}
+    pauses: list[float] = []
 
     def fetcher(url, **kwargs):
         index = url.split("/")[-1].split("?")[0]
         calls[index] = calls.get(index, 0) + 1
         return by_index[index]
 
-    monkeypatch.setattr(regional.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(regional.time, "sleep", pauses.append)
     data = build(tmp_path / "industry.json", date(2026, 9, 23), fetcher)
 
     assert calls["701625"] == regional.SEMANTIC_RETRIES
+    assert pauses == [10.0, 20.0, 30.0, 30.0]
     assert len(missing_series(data)) == len(places_of(INDUSTRY_SERIES[0]))
     assert all(
         "неполный ответ по mining" in issue
