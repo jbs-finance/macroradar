@@ -150,6 +150,20 @@ def test_sections_stripped_from_page_are_caught(sandbox: Path):
     assert any("ключевые показатели фонда" in line for line in found), found
 
 
+def test_new_asset_block_removed_from_page_is_caught(sandbox: Path):
+    document = read(sandbox, "national-fund/index.html")
+    stripped = re.sub(
+        r'<section class="asset-section" id="children".*?</section>',
+        "",
+        document,
+        count=1,
+        flags=re.S,
+    )
+    write(sandbox, "national-fund/index.html", stripped)
+    found = fresh(sandbox)
+    assert any("Нацфонд — детям" in line for line in found), found
+
+
 def test_collapsed_regions_in_dump_are_caught(sandbox: Path):
     path = sandbox / "tax" / "budget.json"
     payload = json.loads(path.read_text(encoding="utf-8"))
