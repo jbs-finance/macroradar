@@ -295,6 +295,7 @@ jobs:
           check_root_redirect
           check_page /macroradar/ https://jbs.finance/macroradar/
           check_page /macroradar/macro/ https://jbs.finance/macroradar/macro/
+          check_page /macroradar/national-fund/ https://jbs.finance/macroradar/national-fund/
           check_page /macroradar/energy/ https://jbs.finance/macroradar/energy/
           check_page /macroradar/industry/ https://jbs.finance/macroradar/industry/
           check_page /macroradar/health/ https://jbs.finance/macroradar/health/

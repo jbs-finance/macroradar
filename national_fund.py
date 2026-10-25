@@ -17,6 +17,7 @@ from datetime import date
 from pathlib import Path
 
 from etl import RAW, SourceError, _now, fetch
+from sovereign_assets import load_disclosures
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_DATASET = HERE / "out" / "national_fund.json"
@@ -161,6 +162,7 @@ def build(dataset: Path = DEFAULT_DATASET, today: date | None = None) -> dict:
             "returns": "ежегодно, HTML-таблица НБРК, 2001 год по настоящее время",
             "operations": "ежемесячно, но единого машинного ряда за 10 лет нет",
         },
+        "official_disclosures": load_disclosures(),
     }
 
 

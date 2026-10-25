@@ -1,0 +1,146 @@
+{
+  "schema_version": 1,
+  "verified_at": "2026-10-25",
+  "status": "official_disclosures",
+  "national_fund": {
+    "monthly": {
+      "as_of": "2026-09-30",
+      "currency": "USD",
+      "unit": "million",
+      "basis": "stock_net_of_children_claims",
+      "foreign_assets": 66653,
+      "source": "https://nationalbank.kz/ru/international-reserve-and-asset/mezhdunarodnye-rezervy-i-aktivy-nacionalnogo-fonda-rk"
+    },
+    "domestic_monthly": {
+      "as_of": "2026-09-30",
+      "currency": "KZT",
+      "unit": "billion",
+      "basis": "stock_by_published_valuation",
+      "cash": 42,
+      "debt_nominal": 3378,
+      "debt_fair_value": 1385,
+      "equity_cost": 1767,
+      "equity_fair_value": 5288,
+      "source": "https://nationalbank.kz/ru/news/operations-NF/rubrics/2547",
+      "note": "Номинал и справедливая стоимость — альтернативные оценки одних активов; их нельзя складывать."
+    },
+    "annual_2025": {
+      "as_of": "2025-12-31",
+      "currency": "USD",
+      "unit": "absolute",
+      "basis": "audited_annual_stock",
+      "stabilization_portfolio": 4716322207,
+      "savings_portfolio": 60676134580,
+      "savings_components": [
+        {"id": "developed_bonds", "label": "Облигации развитых стран", "value": 15372488983},
+        {"id": "emerging_bonds", "label": "Облигации развивающихся стран", "value": 11391488888},
+        {"id": "corporate_bonds", "label": "Корпоративные облигации", "value": 5591519679},
+        {"id": "equities", "label": "Акции", "value": 22390532459},
+        {"id": "gold", "label": "Золото", "value": 4223794283},
+        {"id": "alternatives", "label": "Альтернативные инструменты", "value": 1706310288}
+      ],
+      "gross_foreign_portfolios": 65392456787,
+      "children_claims": 1497922686,
+      "net_foreign_assets": 63894534101,
+      "domestic_securities_usd_equivalent": 9637399181,
+      "domestic_cash_usd_equivalent": 271465790,
+      "total_market_value": 73803399072,
+      "source": "https://nationalbank.kz/file/download/135446",
+      "source_pages": "печатные страницы 23–24 (PDF 24–25), баланс — страница 12",
+      "note": "Доли мандатов рассчитаны от валовой суммы валютных портфелей. Категория развивающихся рынков по мандату может включать корпоративные бумаги."
+    }
+  },
+  "children": {
+    "claims": {
+      "as_of": "2026-02-01",
+      "currency": "USD",
+      "unit": "absolute",
+      "basis": "stock_target_claims",
+      "value": 2311381549.92
+    },
+    "enpf_target_savings": {
+      "as_of": "2026-10-01",
+      "currency": "USD",
+      "unit": "absolute",
+      "basis": "stock_enpf_target_savings",
+      "value": 161057695.10
+    },
+    "historical_accrual_approx": {
+      "through": "2026-10-01",
+      "currency": "USD",
+      "unit": "absolute",
+      "basis": "cumulative_flow_approximate",
+      "value": 2500000000
+    },
+    "historical_payouts": {
+      "through": "2026-10-01",
+      "currency": "USD",
+      "unit": "absolute",
+      "basis": "cumulative_flow",
+      "value": 88860000
+    },
+    "sources": [
+      "https://www.enpf.kz/ru/indicators/national-fund-for-kids/participants.php",
+      "https://cabinet.enpf.kz/restServiceCabinet/other/getParticipant?lang=0",
+      "https://cabinet.enpf.kz/restServiceCabinet/other/getRecipients?lang=0",
+      "https://nationalbank.kz/ru/page/National-Fund-for-Children"
+    ],
+    "note": "Остатки на разные даты не складываются. Начисления и выплаты — накопленные потоки, а не текущий остаток."
+  },
+  "nbk_reserves": {
+    "as_of": "2026-09-30",
+    "currency": "USD",
+    "unit": "million",
+    "basis": "preliminary_stock",
+    "gross": 66410,
+    "gold": 51432,
+    "foreign_currency": 14979,
+    "net": 64287,
+    "source": "https://nationalbank.kz/ru/international-reserve-and-asset/mezhdunarodnye-rezervy-i-aktivy-nacionalnogo-fonda-rk",
+    "note": "Предварительные данные. Компоненты отличаются от итога на 1 млн USD из-за округления; это отдельный пул, не Нацфонд."
+  },
+  "enpf": {
+    "nbk_managed": {
+      "as_of": "2026-10-01",
+      "currency": "KZT",
+      "unit": "billion",
+      "basis": "stock_opv_oppv_dpv_managed_by_nbk",
+      "total": 26633.21,
+      "components": [
+        {"id": "kz_finance_ministry", "label": "Государственные бумаги МФ РК", "value": 11542.48},
+        {"id": "foreign_government", "label": "Иностранные государственные бумаги", "value": 354.55},
+        {"id": "international_financial_institutions", "label": "Международные финансовые организации", "value": 266.94},
+        {"id": "kz_corporate", "label": "Корпоративные облигации РК", "value": 8.93},
+        {"id": "quasi_state", "label": "Облигации квазигосударственного сектора", "value": 2201.38},
+        {"id": "kz_banks", "label": "Инструменты банков РК", "value": 666.58},
+        {"id": "ppn", "label": "Ноты участия (PPN)", "value": 7.93},
+        {"id": "kz_equities", "label": "Акции казахстанских эмитентов", "value": 525.25},
+        {"id": "nbk_deposits", "label": "Депозиты в НБК", "value": 700.60},
+        {"id": "nbk_notes", "label": "Ноты НБК", "value": 0},
+        {"id": "cash", "label": "Деньги на инвестиционных счетах", "value": 219.94},
+        {"id": "repo", "label": "Обратное РЕПО", "value": 113.36},
+        {"id": "foreign_corporate", "label": "Иностранные корпоративные бумаги", "value": 4.81},
+        {"id": "other", "label": "Прочие активы", "value": 0},
+        {"id": "index_management", "label": "Индексное управление", "value": 10020.46}
+      ],
+      "source": "https://portfoliows.enpf.kz/portfoliopdf/downloadPdf/guid=0f612e4b-5494-4f68-a5a6-d9d3e5a29176",
+      "source_location": "таблица 1, страница 1"
+    },
+    "opvr": {
+      "as_of": "2026-10-01",
+      "currency": "KZT",
+      "unit": "billion",
+      "basis": "separate_pool",
+      "including_contribution_account": 1430.21,
+      "managed": 1428.29
+    },
+    "private_managers": {
+      "as_of": "2026-10-01",
+      "currency": "KZT",
+      "unit": "billion",
+      "basis": "separate_pool",
+      "value": 206.0992
+    },
+    "note": "Главная структура относится только к ОПВ/ОППВ/ДПВ под управлением НБК. ОПВР и частные управляющие показаны отдельно; индексное управление уже включено в итог."
+  }
+}
