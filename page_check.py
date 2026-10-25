@@ -699,6 +699,14 @@ def unresolved_problems(relpath: str, root: Node) -> list[str]:
     return found
 
 
+def kgd_months_expected(payload: dict) -> int:
+    """До ноября год неполный: за август в разрезе ровно восемь месяцев."""
+    period = (payload.get("dynamics") or {}).get("period") or ""
+    if re.fullmatch(r"\d{4}-\d{2}", period):
+        return min(MIN_KGD_MONTHS, int(period[5:]))
+    return MIN_KGD_MONTHS
+
+
 def size(payload: dict, *path: str) -> int:
     """Длина списка по пути в выгрузке: пропавшая ветка это ноль, а не падение."""
     node = payload
@@ -765,7 +773,7 @@ def json_expectations(relpath: str, payload: dict) -> list[tuple[str, int, int]]
             (
                 "месяцев в разбивке КГД",
                 size(payload, "dynamics", "months"),
-                MIN_KGD_MONTHS,
+                kgd_months_expected(payload),
             ),
             (
                 "видов налогов в структуре",
