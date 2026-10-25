@@ -46,6 +46,7 @@ from housing import HOUSING_SERIES
 from transport import TRANSPORT_SERIES
 from industry import INDUSTRY_SERIES
 from regional import places_of
+from sovereign_assets import load_disclosures
 
 SITE_URL = "https://jbs.finance"
 PUBLIC_PREFIX = "/macroradar"
@@ -121,6 +122,7 @@ def fixture_national_fund() -> dict:
         "returns": returns,
         "returns_source": "https://nationalbank.kz/ru/page/investicionnyy-dohod",
         "issues": [],
+        "official_disclosures": load_disclosures(),
     }
 
 
