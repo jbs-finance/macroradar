@@ -1,6 +1,7 @@
 from datetime import date
 
 import regional
+from etl import SourceError
 from industry import INDUSTRY_SERIES, KNOWN_GAPS, build, missing_series
 from regional import REGIONS, places_of
 
@@ -114,6 +115,11 @@ def test_permanently_missing_category_still_fails_hard(monkeypatch, tmp_path):
         return by_index[index]
 
     monkeypatch.setattr(regional.time, "sleep", pauses.append)
+    monkeypatch.setattr(
+        regional,
+        "fetch_dynamics_periods",
+        lambda _spec, _term: (_ for _ in ()).throw(SourceError("нет точечного ряда")),
+    )
     data = build(tmp_path / "industry.json", date(2026, 9, 23), fetcher)
 
     assert calls["701625"] == regional.SEMANTIC_RETRIES
