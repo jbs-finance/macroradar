@@ -31,19 +31,45 @@ FUND_STYLE = """
 .fund-hero h1 { max-width: 22ch; font-family: Georgia, "Times New Roman", serif; font-size: clamp(1.75rem, 4vw, 2.5rem); letter-spacing: -0.025em; line-height: 1.15; }
 .fund-hero .lede { max-width: 58ch; font-size: 1.1rem; line-height: 1.55; }
 .fund-summary { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 1px; margin-bottom: 3rem; background: var(--muted); border: 1px solid var(--muted); }
+.story-heading { margin: 0 0 1rem; font-family: Georgia, "Times New Roman", serif; font-size: clamp(1.55rem, 3vw, 2.15rem); letter-spacing: -0.025em; }
+.asset-map { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin: 0 0 3rem; background: var(--muted); border: 1px solid var(--muted); }
+.asset-map a { min-width: 0; padding: clamp(1rem, 2.4vw, 1.4rem); color: inherit; text-decoration: none; background: var(--card); }
+.asset-map a:hover, .asset-map a:focus-visible { background: #FAF4EA; }
+.asset-map .owner { display: block; margin-bottom: 0.35rem; color: var(--muted-fg); font-size: 0.74rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+.asset-map strong { display: block; font-family: Georgia, "Times New Roman", serif; font-size: 1.25rem; }
+.asset-map .map-value { display: block; margin: 0.65rem 0 0.2rem; font-size: 1.05rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.asset-map .map-note { display: block; color: var(--muted-fg); font-size: 0.84rem; line-height: 1.4; }
 .fund-stat { padding: clamp(1rem, 2.4vw, 1.65rem); background: var(--card); }
 .fund-stat .label { margin: 0 0 0.65rem; color: var(--muted-fg); font-size: 0.8rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; }
 .fund-stat .number { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: clamp(1.65rem, 3.4vw, 2.8rem); letter-spacing: -0.035em; line-height: 1; }
 .fund-stat .note { margin: 0.65rem 0 0; color: var(--muted-fg); font-size: 0.85rem; }
 .fund-stat--main { background: #273C37; color: #F6F0E7; }
 .fund-stat--main .label, .fund-stat--main .note { color: #D7DDD3; }
-.fund-chart { padding: clamp(1.15rem, 3vw, 2rem); margin: 1.5rem 0 3rem; background: #EDE4D5; border-top: 3px solid #2F6B4F; }
-.fund-chart h2 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: clamp(1.55rem, 3vw, 2.15rem); letter-spacing: -0.025em; }
-.fund-chart .section-note { margin: 0.5rem 0 1.1rem; }
-.fund-chart .spark { width: 100%; height: 145px; color: #2F6B4F; }
-.fund-chart .spark-line { stroke: currentColor; stroke-width: 2.5; fill: none; }
-.fund-chart .spark-area { fill: rgba(47, 107, 79, 0.13); }
+.trend-panel { padding: clamp(1.15rem, 3vw, 2rem); margin: 1.5rem 0 3rem; background: #EDE4D5; border-top: 3px solid #2F6B4F; }
+.trend-panel > h2 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: clamp(1.55rem, 3vw, 2.15rem); letter-spacing: -0.025em; }
+.trend-panel > .section-note { margin: 0.5rem 0 1.25rem; }
+.trend-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(310px, 0.75fr); gap: 1rem; }
+.trend-card { min-width: 0; margin: 0; padding: 1rem; background: var(--card); border: 1px solid var(--muted); }
+.trend-card figcaption { min-height: 3.2rem; margin-bottom: 0.75rem; }
+.trend-card figcaption strong { display: block; margin-bottom: 0.2rem; }
+.trend-card figcaption span { color: var(--muted-fg); font-size: 0.82rem; line-height: 1.35; }
+.trend-card .spark { width: 100%; height: 154px; color: #2F6B4F; }
+.trend-card .spark-line { stroke: currentColor; stroke-width: 2.5; fill: none; }
+.trend-card .spark-area { fill: rgba(47, 107, 79, 0.13); }
 .years { display: flex; justify-content: space-between; gap: 0.5rem; color: var(--muted-fg); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.75rem; }
+.return-plot { --zero: 52%; position: relative; display: grid; grid-template-columns: repeat(var(--return-count), minmax(0, 1fr)); gap: clamp(0.18rem, 0.8vw, 0.5rem); height: 178px; border-bottom: 1px solid var(--muted); }
+.return-zero { position: absolute; z-index: 0; top: var(--zero); right: 0; left: 0; border-top: 1px solid var(--line); }
+.return-column { position: relative; min-width: 0; height: 100%; }
+.return-bar { position: absolute; z-index: 1; right: 18%; left: 18%; min-height: 2px; border-radius: 2px 2px 0 0; background: #2F6B4F; }
+.return-bar--positive { bottom: calc(100% - var(--zero)); height: var(--bar-height); }
+.return-bar--negative { top: var(--zero); height: var(--bar-height); border-radius: 0 0 2px 2px; background: #A8522F; }
+.return-year { position: absolute; right: 0; bottom: 0; left: 0; color: var(--muted-fg); font-size: clamp(0.58rem, 1.2vw, 0.7rem); text-align: center; }
+.trend-details { margin: 1rem 0 0; background: rgba(255, 255, 255, 0.55); }
+.trend-details summary { font-size: 0.9rem; }
+.trend-details .details-body { max-width: 100%; overflow-x: auto; }
+.trend-details:not([open]) > .details-body { display: none; }
+.availability .details-body { max-width: 100%; overflow-x: auto; }
+.availability details:not([open]) > .details-body { display: none; }
 .availability { display: grid; grid-template-columns: 0.8fr 1.2fr; gap: clamp(1rem, 3vw, 2rem); align-items: start; padding: clamp(1.25rem, 3vw, 2rem); margin: 3rem 0; border: 1px solid var(--muted); }
 .availability h2 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: 1.8rem; line-height: 1.05; }
 .availability dl { margin: 0; display: grid; gap: 1rem; }
@@ -61,8 +87,25 @@ FUND_STYLE = """
 .portfolio-item .share { font-family: Georgia, "Times New Roman", serif; font-size: 1.35rem; }
 .portfolio-item .amount { color: var(--muted-fg); font-size: 0.82rem; }
 @media (max-width: 640px) { .portfolio-grid { grid-template-columns: 1fr; } }
-@media (max-width: 640px) { .fund-summary, .availability { grid-template-columns: 1fr; } .fund-chart { margin-inline: -0.35rem; } }
+@media (max-width: 820px) { .trend-grid { grid-template-columns: 1fr; } .trend-card figcaption { min-height: 0; } }
+@media (max-width: 640px) { .asset-map, .fund-summary, .availability { grid-template-columns: 1fr; } .trend-panel { margin-inline: -0.35rem; } .trend-card { padding-inline: 0.75rem; } }
 """
+
+MONTHS_RU = (
+    "",
+    "январь",
+    "февраль",
+    "март",
+    "апрель",
+    "май",
+    "июнь",
+    "июль",
+    "август",
+    "сентябрь",
+    "октябрь",
+    "ноябрь",
+    "декабрь",
+)
 
 def annual_assets(points: list[dict]) -> list[dict]:
     """Последняя месячная точка каждого года, без искусственной агрегации."""
@@ -103,15 +146,34 @@ def table_rows(assets: list[dict], returns: list[dict]) -> str:
     returns_by_year = {point["date"]: point["value"] for point in returns}
     rows = []
     for point in reversed(annual_assets(assets)):
-        yearly_return = returns_by_year.get(point["date"][:4])
+        year, month = point["date"].split("-")
+        yearly_return = returns_by_year.get(year)
         tone = "positive" if (yearly_return or 0) > 0 else "negative" if yearly_return is not None else ""
         rendered_return = "нет данных" if yearly_return is None else signed(yearly_return)
+        period = year if month == "12" else f"{year} ({MONTHS_RU[int(month)]})"
         rows.append(
-            f"<tr><td>{html.escape(point['date'][:4])}</td>"
-            f"<td>{fmt_num(point['value'], 2)}</td>"
+            f"<tr><td>{html.escape(period)}</td>"
+            f"<td>${fmt_num(point['value'], 2)}</td>"
             f"<td class=\"{tone}\">{rendered_return}</td></tr>"
         )
     return "\n".join(rows)
+
+
+def return_bars(points: list[dict]) -> str:
+    """Отдельная шкала годовой доходности без смешения с активами в USD."""
+    maximum = max((abs(float(point["value"])) for point in points), default=1) or 1
+    rendered = []
+    for point in points:
+        value = float(point["value"])
+        height = abs(value) / maximum * 40
+        tone = "positive" if value >= 0 else "negative"
+        spoken = f"{'плюс ' if value > 0 else 'минус ' if value < 0 else ''}{fmt_num(abs(value), 1)} процента"
+        rendered.append(
+            f'<span class="return-column" role="img" aria-label="{html.escape(point["date"])}: {spoken}" title="{signed(value)}">'
+            f'<span class="return-bar return-bar--{tone}" style="--bar-height:{height:.4f}%" aria-hidden="true"></span>'
+            f'<span class="return-year" aria-hidden="true">{html.escape(point["date"])}</span></span>'
+        )
+    return "".join(rendered)
 
 
 def build(data: dict) -> str:
@@ -119,7 +181,14 @@ def build(data: dict) -> str:
     returns = data["returns"]
     latest_assets = assets[-1]
     latest_return = returns[-1]
-    annual = annual_assets(assets)
+    disclosures = data.get("official_disclosures") or load_disclosures()
+    fund_disclosure = disclosures["national_fund"]
+    children_disclosure = disclosures["children"]
+    reserves_disclosure = disclosures["nbk_reserves"]
+    enpf_disclosure = disclosures["enpf"]["nbk_managed"]
+    domestic_rate = disclosures["fx_rates"][fund_disclosure["domestic_monthly"]["as_of"]]
+    enpf_rate = disclosures["fx_rates"][enpf_disclosure["as_of"]]
+    annual_rate = disclosures["fx_rates"][fund_disclosure["annual_2025"]["as_of"]]
     issues = data.get("issues") or []
     issue_block = ""
     if issues:
@@ -138,9 +207,11 @@ def build(data: dict) -> str:
         annual_change=signed(change(assets, 12)),
         return_value=signed(latest_return["value"]),
         return_date=html.escape(latest_return["date"]),
-        spark=spark(annual, width=900, height=145),
-        first_year=annual[0]["date"][:4],
-        last_year=annual[-1]["date"][:4],
+        spark=spark(assets, width=900, height=154),
+        first_period=assets[0]["date"],
+        last_period=assets[-1]["date"],
+        return_bars=return_bars(returns),
+        return_count_css=len(returns),
         asset_count=count_text(len(assets), ("точка", "точки", "точек")),
         asset_start=html.escape(assets[0]["date"]),
         return_count=count_text(len(returns), ("наблюдение", "наблюдения", "наблюдений")),
@@ -151,10 +222,57 @@ def build(data: dict) -> str:
         asset_source=html.escape(data["assets_source"], quote=True),
         return_source=html.escape(data["returns_source"], quote=True),
         issue_block=issue_block,
+        map_fund_value=fmt_num(latest_assets["value"], 2),
+        map_fund_date=html.escape(latest_assets["date"]),
+        map_children_value=fmt_num(children_disclosure["claims"]["value"] / 1_000_000_000, 2),
+        map_children_date=display_date(children_disclosure["claims"]["as_of"]),
+        map_reserves_value=fmt_num(reserves_disclosure["gross"] / 1000, 2),
+        map_reserves_date=display_date(reserves_disclosure["as_of"]),
+        map_enpf_value=fmt_num(enpf_disclosure["total"] / enpf_rate["kzt_per_usd"], 2),
+        map_enpf_date=display_date(enpf_disclosure["as_of"]),
         cta=cta_block(),
         skip_link=skip_link(),
         footer=detail_footer(date.today().year),
+        annual_source=html.escape(fund_disclosure["annual_2025"]["source"], quote=True),
+        domestic_source=html.escape(fund_disclosure["domestic_monthly"]["source"], quote=True),
+        child_source=html.escape(children_disclosure["sources"][0], quote=True),
+        child_participant_api=html.escape(children_disclosure["sources"][1], quote=True),
+        child_recipient_api=html.escape(children_disclosure["sources"][2], quote=True),
+        child_method_source=html.escape(children_disclosure["sources"][3], quote=True),
+        reserves_source=html.escape(reserves_disclosure["source"], quote=True),
+        enpf_source=html.escape(enpf_disclosure["source"], quote=True),
+        annual_rate=fmt_num(annual_rate["kzt_per_usd"], 2),
+        domestic_rate=fmt_num(domestic_rate["kzt_per_usd"], 2),
+        domestic_rate_source=html.escape(domestic_rate["source"], quote=True),
+        enpf_rate=fmt_num(enpf_rate["kzt_per_usd"], 2),
+        enpf_rate_source=html.escape(enpf_rate["source"], quote=True),
+        kzt_rows=currency_provenance_rows(disclosures),
         year=date.today().year,
+    )
+
+
+def display_date(value: str) -> str:
+    year, month, day = value.split("-")
+    return f"{day}.{month}.{year}"
+
+
+def currency_provenance_rows(disclosures: dict) -> str:
+    domestic = disclosures["national_fund"]["domestic_monthly"]
+    enpf = disclosures["enpf"]
+    main = enpf["nbk_managed"]
+    rows = [
+        ("Нацфонд: долговые инструменты, номинал", domestic["as_of"], domestic["debt_nominal"]),
+        ("Нацфонд: долговые инструменты, справедливая стоимость", domestic["as_of"], domestic["debt_fair_value"]),
+        ("Нацфонд: долевые инструменты, стоимость приобретения", domestic["as_of"], domestic["equity_cost"]),
+        ("Нацфонд: долевые инструменты, справедливая стоимость", domestic["as_of"], domestic["equity_fair_value"]),
+        ("Нацфонд: остаток денег", domestic["as_of"], domestic["cash"]),
+        ("ЕНПФ: основной портфель под управлением НБК", main["as_of"], main["total"]),
+        ("ЕНПФ: ОПВР со взносным счётом", enpf["opvr"]["as_of"], enpf["opvr"]["including_contribution_account"]),
+        ("ЕНПФ: частные управляющие", enpf["private_managers"]["as_of"], enpf["private_managers"]["value"]),
+    ]
+    return "".join(
+        f"<tr><td>{html.escape(label)}</td><td>{display_date(as_of)}</td><td>{fmt_num(value, 4)} млрд KZT</td></tr>"
+        for label, as_of, value in rows
     )
 
 
@@ -173,48 +291,66 @@ TEMPLATE = """<!doctype html>
 <div class="wrap">
   <header class="fund-hero">
     <h1>Нацфонд, резервы НБК и пенсионные активы</h1>
-    <p class="lede">Четыре независимых блока без искусственного «общего кошелька»: кому принадлежат активы, на какую дату и в какой оценке. Остатки не смешиваются с потоками.</p>
+    <p class="lede">Здесь собраны четыре самостоятельных пула активов. Для каждого указаны владелец, дата и способ оценки. Остатки и накопленные потоки показаны отдельно.</p>
     <p class="updated">Собрано {generated}</p>
   </header>
 {issue_block}
   <main id="main-content">
+    <section aria-labelledby="map-title">
+      <h2 class="story-heading" id="map-title">Четыре пула, четыре задачи</h2>
+      <p class="section-note">Показатели нельзя складывать: у них разные владельцы, назначение, даты и единицы.</p>
+      <div class="asset-map">
+        <a href="#fund-structure"><span class="owner">Республика Казахстан · управление НБК</span><strong>Национальный фонд</strong><span class="map-value">${map_fund_value} млрд</span><span class="map-note">Валютные активы на {map_fund_date}. Сбережение нефтяных доходов и стабилизация бюджета.</span></a>
+        <a href="#children"><span class="owner">Участники программы · учёт ЕНПФ</span><strong>«Нацфонд — детям»</strong><span class="map-value">${map_children_value} млрд</span><span class="map-note">Обязательства по целевым требованиям на {map_children_date}. Средства начислены детям.</span></a>
+        <a href="#reserves"><span class="owner">Национальный банк Казахстана</span><strong>Международные резервы</strong><span class="map-value">${map_reserves_value} млрд</span><span class="map-note">Валовой предварительный остаток на {map_reserves_date}. Резерв для внешней устойчивости.</span></a>
+        <a href="#enpf"><span class="owner">Вкладчики ЕНПФ · управление НБК</span><strong>Пенсионные активы</strong><span class="map-value">${map_enpf_value} млрд</span><span class="map-note">Основной портфель на {map_enpf_date}. Средства для пенсионных выплат.</span></a>
+      </div>
+    </section>
+
+    <h2 class="story-heading">Национальный фонд: объём и результат</h2>
     <section class="fund-summary" aria-label="Ключевые показатели Национального фонда">
-      <article class="fund-stat fund-stat--main"><p class="label">Валютные активы</p><p class="number">{asset_value}</p><p class="note">млрд USD, на конец {asset_date}</p></article>
+      <article class="fund-stat fund-stat--main"><p class="label">Валютные активы</p><p class="number">${asset_value}</p><p class="note">млрд, на конец {asset_date}</p></article>
       <article class="fund-stat"><p class="label">Изменение за 12 месяцев</p><p class="number">{annual_change}</p><p class="note">по ежемесячному ряду валютных активов</p></article>
       <article class="fund-stat"><p class="label">Доходность</p><p class="number">{return_value}</p><p class="note">за {return_date} год, не доход бюджета</p></article>
     </section>
 
-    <section class="fund-chart" aria-labelledby="assets-title">
-      <h2 id="assets-title">Валютные активы: 10 лет</h2>
-      <p class="section-note">Последняя доступная точка каждого года, млрд USD. Полный месячный ряд собирается из первичного JSON НБРК.</p>
-      {spark}
-      <div class="years"><span>{first_year}</span><span>{last_year}</span></div>
-    </section>
-
-    <section class="availability" aria-labelledby="availability-title">
-      <h2 id="availability-title">Доступность данных</h2>
-      <dl>
-        <div><dt>Валютные активы: доступны</dt><dd>НБРК публикует месячный JSON. В радаре {asset_count} с {asset_start} до последней публикации.</dd></div>
-        <div><dt>Доходность: доступна</dt><dd>НБРК обновляет годовую таблицу. В радаре {return_count} за {return_start}-{return_end} годы.</dd></div>
-        <div><dt>Операции и трансферты: пока не включены</dt><dd>НБРК публикует свежие операции ежемесячно, но нет единого машиночитаемого ряда на 10 лет. Сводить архивные таблицы без отдельной сверки было бы недостоверно.</dd></div>
-      </dl>
+    <section class="trend-panel" aria-labelledby="assets-title">
+      <h2 id="assets-title">Динамика Национального фонда</h2>
+      <p class="section-note">Активы и доходность измеряются по разным шкалам. Поэтому они показаны рядом, но не объединены в одну линию.</p>
+      <div class="trend-grid">
+        <figure class="trend-card"><figcaption><strong>Валютные активы, $ млрд</strong><span>Месячный ряд НБРК. Последняя точка: {last_period}.</span></figcaption>{spark}<div class="years"><span>{first_period}</span><span>{last_period}</span></div></figure>
+        <figure class="trend-card"><figcaption><strong>Годовая доходность, %</strong><span>Отдельный официальный ряд. Доходность за 2026 год ещё не опубликована.</span></figcaption><div class="return-plot" style="--return-count:{return_count_css}" aria-label="Годовая доходность активов Национального фонда">{return_bars}<span class="return-zero" aria-hidden="true"></span></div></figure>
+      </div>
+      <details class="trend-details"><summary>Точные годовые значения</summary><div class="details-body"><p class="section-note">Для активов указана последняя опубликованная месячная точка года. В строке 2026 года прямо указан месяц. Доходность взята из отдельного годового ряда НБРК.</p><table class="year-table"><thead><tr><th>Период</th><th>Активы, $ млрд</th><th>Доходность</th></tr></thead><tbody>{rows}</tbody></table></div></details>
     </section>
 
     {assets_blocks}
 
-    <section aria-labelledby="history-title">
-      <h2 id="history-title">Годовые точки</h2>
-      <p class="section-note">Активы: последняя опубликованная месяцем точка года. Доходность: отдельный годовой ряд НБРК.</p>
-      <table class="year-table"><thead><tr><th>Год</th><th>Активы, млрд USD</th><th>Доходность</th></tr></thead><tbody>{rows}</tbody></table>
+    <section class="availability" aria-labelledby="availability-title">
+      <h2 id="availability-title">Источники и методология</h2>
+      <div><p class="section-note">Здесь собраны официальные ссылки, полнота рядов и применённые правила расчёта.</p><dl>
+        <div><dt>Валютные активы</dt><dd>НБРК публикует месячный JSON. В радаре {asset_count} с {asset_start} до последней публикации.</dd></div>
+        <div><dt>Доходность</dt><dd>НБРК обновляет годовую таблицу. В радаре {return_count} за {return_start}-{return_end} годы.</dd></div>
+        <div><dt>Операции и трансферты</dt><dd>Свежие операции выходят ежемесячно. Единого машиночитаемого ряда за десять лет нет, поэтому архивные таблицы пока не объединены.</dd></div>
+      </dl><details><summary>Как рассчитаны показатели</summary><div class="details-body"><ul>
+        <li>Месячная линия активов построена по исходному JSON НБРК без интерполяции.</li>
+        <li>В таблице по годам показана последняя опубликованная месячная точка каждого года. Для незавершённого 2026 года указан сентябрь.</li>
+        <li>Годовая доходность взята из отдельного ряда НБРК. Она не рассчитана из изменения активов.</li>
+        <li>Доли на диаграммах рассчитаны от официального валового итога соответствующего пула.</li>
+        <li>Валютные активы показаны в долларах на конец периода. Годовые поступления в бюджет считаются отдельно.</li>
+        <li>С 1 февраля 2024 года НБРК показывает валютные активы после учёта обязательств по целевым требованиям программы «Нацфонд — детям». Для сравнения с ранними периодами нужна эта оговорка.</li>
+        <li>Доходность относится к управлению валютными активами. Поступления от нефтяного сектора и трансферты в бюджет в неё не входят.</li>
+        <li>Нацфонд, резервы НБК и пенсионные активы относятся к разным владельцам и задачам. Общая сумма для них не рассчитывается.</li>
+      </ul></div></details><details><summary>Исходные суммы в тенге и пересчёт</summary><div class="details-body"><p>Формула для всех тенговых строк: млрд KZT ÷ официальный курс KZT за $1 = $ млрд.</p><table class="data-table"><thead><tr><th>Показатель</th><th>Дата оценки</th><th>Исходное значение</th></tr></thead><tbody>{kzt_rows}</tbody></table><ul><li>На 30.09.2026: <a href="{domestic_rate_source}">{domestic_rate} тенге за $1</a>.</li><li>На 01.10.2026: <a href="{enpf_rate_source}">{enpf_rate} тенге за $1</a>.</li><li>Годовой отчёт на 31.12.2025 использует курс {annual_rate} тенге за $1. Долларовые эквиваленты годового среза взяты прямо из отчёта.</li></ul></div></details><h3>Официальные источники</h3><ul class="source-list">
+        <li><a href="{asset_source}">НБРК: валютные активы Нацфонда и международные резервы</a></li>
+        <li><a href="{return_source}">НБРК: доходность валютных активов Нацфонда</a></li>
+        <li><a href="{annual_source}">НБРК: годовой отчёт Нацфонда за 2025 год</a></li>
+        <li><a href="{domestic_source}">НБРК: операции Нацфонда за сентябрь 2026 года</a></li>
+        <li><a href="{child_source}">ЕНПФ: официальная таблица программы «Нацфонд — детям»</a></li>
+        <li><a href="{child_method_source}">НБРК: правила программы «Национальный фонд — детям»</a></li>
+        <li><a href="{enpf_source}">ЕНПФ: структура инвестиционного портфеля</a></li>
+      </ul><details><summary>Машиночитаемые данные программы</summary><div class="details-body"><ul><li><a href="{child_participant_api}">ЕНПФ: участники и целевые требования</a></li><li><a href="{child_recipient_api}">ЕНПФ: получатели и целевые накопления</a></li><li><a href="{reserves_source}">НБРК: таблица резервов</a></li></ul></div></details></div>
     </section>
-
-    <details><summary>Что важно при сравнении</summary><div class="details-body"><ul>
-      <li>Валютные активы показаны в USD, на конец периода. Это не активы в тенге и не сумма годовых поступлений в бюджет.</li>
-      <li>С 1 февраля 2024 года НБРК отражает валютные активы за вычетом обязательств по целевым требованиям программы «Нацфонд — детям». Сравнение с ранними периодами требует этой оговорки.</li>
-      <li>Доходность отражает управление валютными активами. Она не равна поступлениям от нефтяного сектора или трансфертам в бюджет.</li>
-      <li>Нацфонд, резервы НБК и пенсионные активы — разные пулы. Общий итог для них намеренно не рассчитывается.</li>
-    </ul></div></details>
-    <p class="section-note">Источники: <a href="{asset_source}">НБРК, валютные активы</a> и <a href="{return_source}">НБРК, доходность активов</a>.</p>
 {cta}
   </main>
   {footer}

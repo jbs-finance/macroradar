@@ -1,4 +1,4 @@
-from build_national_fund import build, count_text
+from build_national_fund import build, count_text, return_bars, table_rows
 
 
 def dataset():
@@ -28,15 +28,47 @@ def test_page_has_canonical_sources_and_honest_availability_note():
     assert 'rel="canonical" href="https://jbs.finance/macroradar/national-fund/"' in page
     assert 'aria-current="page">Нацфонд' in page
     assert "66,12" in page
-    assert "Операции и трансферты: пока не включены" in page
+    assert "Источники и методология" in page
+    assert "Операции и трансферты" in page
     assert "Структура Национального фонда" in page
     assert "Альтернативные инструменты" in page
     assert "Международные резервы НБК" in page
     assert "Пенсионные активы ЕНПФ" in page
-    assert "Общего остатка" in page and "складывать эти показатели некорректно" in page
-    assert "Общий итог для них намеренно не рассчитывается" in page
-    assert "за вычетом обязательств" in page
+    assert "Сводная сумма" in page and "не считается" in page
+    assert "Общая сумма для них не рассчитывается" in page
+    assert "после учёта обязательств" in page
     assert 'href="https://nationalbank.kz/assets"' in page
+    assert page.index('id="enpf"') < page.index('id="availability-title"')
+    assert page.index('id="map-title"') < page.index("Национальный фонд: объём и результат")
+    assert "$66,12" in page
+    main_story = page[: page.index('id="availability-title"')]
+    assert " млрд USD" not in main_story
+    assert " млрд KZT" not in main_story
+
+
+def test_trends_share_one_section_but_keep_units_and_scales_separate():
+    page = build(dataset())
+    assert "Динамика Национального фонда" in page
+    assert "Месячный ряд НБРК" in page
+    assert "Годовая доходность, %" in page
+    assert "Годовые точки" not in page
+    assert "Точные годовые значения" in page
+    assert "2026 (июль)" in page
+    assert 'role="img" aria-label="2017: плюс 7,6 процента"' in page
+
+
+def test_return_chart_preserves_negative_sign_and_uses_its_own_scale():
+    chart = return_bars([{"date": "2024", "value": 7.5}, {"date": "2025", "value": -10.0}])
+    assert "return-bar--positive" in chart
+    assert "return-bar--negative" in chart
+    assert "--bar-height:30.0000%" in chart
+    assert "--bar-height:40.0000%" in chart
+
+
+def test_incomplete_year_names_the_latest_month_in_exact_table():
+    rows = table_rows(dataset()["assets"], dataset()["returns"])
+    assert "2026 (июль)" in rows
+    assert "2025 (декабрь)" not in rows
 
 
 def test_page_marks_saved_data_without_removing_it():

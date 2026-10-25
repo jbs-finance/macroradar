@@ -2,6 +2,27 @@
   "schema_version": 1,
   "verified_at": "2026-10-25",
   "status": "official_disclosures",
+  "fx_rates": {
+    "2025-12-31": {
+      "pair": "USD/KZT",
+      "kzt_per_usd": 505.53,
+      "kind": "annual_report_conversion_rate",
+      "source": "https://nationalbank.kz/file/download/135446",
+      "note": "Курс из годового раскрытия. Долларовые эквиваленты годового среза взяты прямо из отчёта."
+    },
+    "2026-09-30": {
+      "pair": "USD/KZT",
+      "kzt_per_usd": 439.37,
+      "kind": "official_daily_rate",
+      "source": "https://nationalbank.kz/rss/get_rates.cfm?fdate=30.09.2026"
+    },
+    "2026-10-01": {
+      "pair": "USD/KZT",
+      "kzt_per_usd": 440.86,
+      "kind": "official_daily_rate",
+      "source": "https://nationalbank.kz/rss/get_rates.cfm?fdate=01.10.2026"
+    }
+  },
   "national_fund": {
     "monthly": {
       "as_of": "2026-09-30",
