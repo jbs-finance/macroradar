@@ -36,6 +36,18 @@ def validate_disclosures(data: dict) -> dict:
     if data.get("schema_version") != 1 or data.get("status") != "official_disclosures":
         raise SourceError("официальный срез: неподдерживаемая схема")
 
+    fx_rates = data["fx_rates"]
+    for rate_date in ("2025-12-31", "2026-09-30", "2026-10-01"):
+        _require_date(rate_date, "валютного курса")
+        rate = fx_rates[rate_date]
+        if rate["pair"] != "USD/KZT" or _decimal(rate["kzt_per_usd"]) <= 0:
+            raise SourceError("официальный срез: неверный курс USD/KZT")
+    if fx_rates["2025-12-31"]["kind"] != "annual_report_conversion_rate":
+        raise SourceError("официальный срез: потерян курс годового раскрытия")
+    for rate_date in ("2026-09-30", "2026-10-01"):
+        if fx_rates[rate_date]["kind"] != "official_daily_rate":
+            raise SourceError("официальный срез: дневной курс не помечен")
+
     fund = data["national_fund"]
     annual = fund["annual_2025"]
     _require_date(annual["as_of"], "Нацфонда")
@@ -67,6 +79,8 @@ def validate_disclosures(data: dict) -> dict:
     domestic = fund["domestic_monthly"]
     _require_date(fund["monthly"]["as_of"], "месячного Нацфонда")
     _require_date(domestic["as_of"], "тенговых активов Нацфонда")
+    if domestic["as_of"] not in fx_rates:
+        raise SourceError("официальный срез: нет курса для тенговых активов Нацфонда")
     if domestic["debt_nominal"] == domestic["debt_fair_value"]:
         raise SourceError("официальный срез: потеряно различие оценок долговых активов")
     if domestic["equity_cost"] == domestic["equity_fair_value"]:
@@ -92,6 +106,8 @@ def validate_disclosures(data: dict) -> dict:
     enpf = data["enpf"]
     portfolio = enpf["nbk_managed"]
     _require_date(portfolio["as_of"], "портфеля ЕНПФ")
+    if portfolio["as_of"] not in fx_rates:
+        raise SourceError("официальный срез: нет курса для портфеля ЕНПФ")
     enpf_sum = sum(
         (_decimal(row["value"]) for row in portfolio["components"]), Decimal("0")
     )
