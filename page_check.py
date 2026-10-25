@@ -407,7 +407,10 @@ SECTIONS = {
         Section(".fund-summary", "ключевые показатели фонда", numbers=3),
         Section("#assets-title", "валютные активы", charts=1),
         Section("#availability-title", "доступность данных", items=3),
-        Section("#portfolio-title", "состав портфеля", numbers=3),
+        Section("#fund-structure", "структура Нацфонда", numbers=12, links=2),
+        Section("#children", "Нацфонд — детям", numbers=4, links=1),
+        Section("#reserves", "резервы НБК", numbers=6, links=1),
+        Section("#enpf", "пенсионные активы ЕНПФ", numbers=12, rows=10, links=1),
         Section("#history-title", "годовые точки", rows=8),
     ),
     "budget": (
