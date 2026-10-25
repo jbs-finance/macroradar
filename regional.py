@@ -66,7 +66,8 @@ REGIONS: list[tuple[str, str, str]] = [
 
 GAP_VALUES = (None, "", "-", "x")
 SEMANTIC_RETRIES = 5
-SEMANTIC_RETRY_PAUSE = 2.0
+SEMANTIC_RETRY_PAUSE = 10.0
+SEMANTIC_RETRY_MAX_PAUSE = 30.0
 
 
 def dump_url(spec: dict) -> str:
@@ -180,7 +181,12 @@ def build(
                 if not response_is_incomplete(rows, spec):
                     break
                 if attempt < SEMANTIC_RETRIES - 1:
-                    time.sleep(SEMANTIC_RETRY_PAUSE * 2**attempt)
+                    time.sleep(
+                        min(
+                            SEMANTIC_RETRY_PAUSE * 2**attempt,
+                            SEMANTIC_RETRY_MAX_PAUSE,
+                        )
+                    )
             else:
                 expected = len(places_of(spec))
                 present = len(
