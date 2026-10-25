@@ -21,6 +21,9 @@ from __future__ import annotations
 import json
 import sys
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from collections.abc import Callable
 from dataclasses import asdict
 from datetime import date
@@ -28,9 +31,12 @@ from pathlib import Path
 from typing import Any
 
 from etl import (
+    BNS_DATE_RANGE,
     MAX_BODY,
+    RETRIES,
     TALDAU_HEADERS,
     TALDAU_HOST,
+    TIMEOUT,
     Obs,
     Series,
     SourceError,
@@ -134,6 +140,54 @@ def response_is_incomplete(rows: dict[str, list[dict]], spec: dict) -> bool:
     return len(present) < max(1, (len(expected) + 1) // 2)
 
 
+def fetch_dynamics_periods(spec: dict, term: str) -> list[dict]:
+    """Точечный официальный fallback, когда полный дамп потерял целый разрез."""
+    params = {
+        "dicIds": spec["dics"],
+        "indexId": spec["index_id"],
+        "periodId": spec.get("period", 7),
+        "terms": ",".join([term, *(str(value) for value in spec["extra_terms"])]),
+        "filters_dates": BNS_DATE_RANGE,
+    }
+    request = urllib.request.Request(
+        f"{TALDAU_HOST}/ru/NewIndex/GetDynamics",
+        data=urllib.parse.urlencode(params).encode(),
+        headers=TALDAU_HEADERS,
+    )
+    last: Exception | None = None
+    for attempt in range(RETRIES):
+        try:
+            with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+                payload = json.loads(response.read(MAX_BODY + 1).decode("utf-8", "ignore"))
+            dates = payload.get("dateList") if isinstance(payload, dict) else None
+            values = payload.get("valueList") if isinstance(payload, dict) else None
+            if not dates or not isinstance(values, list) or len(dates) != len(values):
+                raise SourceError(
+                    f"{spec['index_id']}: GetDynamics вернул пустой или несогласованный ряд"
+                )
+            periods = []
+            for code, value in zip(dates, values):
+                stamp = str(code)
+                if len(stamp) != 6 or not stamp.isdigit():
+                    raise SourceError(
+                        f"{spec['index_id']}: GetDynamics вернул дату {code!r}"
+                    )
+                periods.append(
+                    {"date": f"31.{stamp[:2]}.{stamp[2:]}", "value": value}
+                )
+            return periods
+        except (
+            urllib.error.URLError,
+            TimeoutError,
+            OSError,
+            json.JSONDecodeError,
+        ) as exc:
+            last = exc
+            if attempt < RETRIES - 1:
+                time.sleep(1.5 * 2**attempt)
+    raise SourceError(f"{spec['index_id']}: GetDynamics недоступен: {last}")
+
+
 def build(
     specs: list[dict],
     prefix: str,
@@ -141,6 +195,7 @@ def build(
     dataset: Path,
     today: date | None = None,
     fetcher: Callable[..., Any] = fetch_json,
+    point_fetcher: Callable[[dict, str], list[dict]] | None = None,
 ) -> dict[str, Any]:
     """Каждый показатель по своим местам (по умолчанию 20 областей). Сбой показателя
     или одного места оставляет прошлый валидный срез только для него."""
@@ -149,6 +204,7 @@ def build(
     issues: list[str] = []
     # Несколько спецификаций читают один дамп (индекс цен на жильё 7 МБ): качаем один раз.
     dumps: dict[str, Any] = {}
+    point_fetcher = point_fetcher or fetch_dynamics_periods
 
     def fallback(series_id: str, reason: str) -> None:
         issues.append(f"{series_id}: {reason}")
@@ -158,6 +214,7 @@ def build(
 
     for spec in specs:
         url = dump_url(spec)
+        row_errors: dict[str, str] = {}
         try:
             for attempt in range(SEMANTIC_RETRIES):
                 if url not in dumps or attempt:
@@ -196,10 +253,24 @@ def build(
                     f"{spec['index_id']}: неполный ответ по {spec['series_key']}: "
                     f"регионов {present} из {expected} после {SEMANTIC_RETRIES} попыток"
                 )
-        except SourceError as exc:
-            for _term, _name, slug in places_of(spec):
-                fallback(f"{prefix}.{spec['series_key']}.{slug}", str(exc))
-            continue
+        except SourceError as dump_error:
+            # Другой официальный endpoint формирует один ряд по точным term-кодам
+            # и не зависит от полноты массового GetIndexData.
+            rows, ambiguous = {}, set()
+            for term, _name, _slug in places_of(spec):
+                try:
+                    rows[term] = point_fetcher(spec, term)
+                except SourceError as exc:
+                    row_errors[term] = str(exc)
+            if response_is_incomplete(rows, spec):
+                expected = len(places_of(spec))
+                reason = (
+                    f"{dump_error}; GetDynamics восстановил регионов "
+                    f"{len(rows)} из {expected}"
+                )
+                for _term, _name, slug in places_of(spec):
+                    fallback(f"{prefix}.{spec['series_key']}.{slug}", reason)
+                continue
         freq = spec.get("freq", "A")
         for term, _name, slug in places_of(spec):
             series_id = f"{prefix}.{spec['series_key']}.{slug}"
@@ -207,7 +278,7 @@ def build(
                 if term in ambiguous:
                     raise SourceError("место встречается в ответе дважды")
                 if term not in rows:
-                    raise SourceError("место не найдено в ответе")
+                    raise SourceError(row_errors.get(term, "место не найдено в ответе"))
                 obs = parse_periods(rows[term], spec["index_id"], freq)
                 if spec.get("keep_last"):
                     obs = obs[-spec["keep_last"]:]

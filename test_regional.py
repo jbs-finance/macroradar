@@ -114,12 +114,46 @@ def test_source_failure_falls_back_per_region_and_known_gap_is_tolerated(
     def fail(*args, **kwargs):
         raise SourceError("источник недоступен")
 
-    data = build([SPEC], "kz.t", "src", dataset, TODAY, fail)
+    data = build(
+        [SPEC],
+        "kz.t",
+        "src",
+        dataset,
+        TODAY,
+        fail,
+        point_fetcher=lambda _spec, _term: (_ for _ in ()).throw(
+            SourceError("точечный источник недоступен")
+        ),
+    )
     assert [(s["series_id"], s["stale"]) for s in data["series"]] == [(series_id, True)]
     assert len(data["issues"]) == len(REGIONS)
     missing = missing_series(data, [SPEC], "kz.t")
     assert series_id not in missing and len(missing) == len(REGIONS) - 1
     assert missing_series(data, [SPEC], "kz.t", frozenset(missing)) == []
+
+
+def test_incomplete_dump_is_restored_from_point_endpoint(monkeypatch, tmp_path: Path):
+    unrelated = [{"terms": [999999, 741917], "periods": periods(("2025", "1"))}]
+    requested: list[str] = []
+
+    def point_fetcher(_spec, term):
+        requested.append(term)
+        return periods(("2024", "30.1"), ("2025", "40.57"))
+
+    monkeypatch.setattr("regional.time.sleep", lambda _seconds: None)
+    data = build(
+        [SPEC],
+        "kz.t",
+        "src",
+        tmp_path / "d.json",
+        TODAY,
+        lambda *args, **kwargs: unrelated,
+        point_fetcher=point_fetcher,
+    )
+
+    assert requested == [term for term, _name, _slug in REGIONS]
+    assert missing_series(data, [SPEC], "kz.t") == []
+    assert not any(row.get("stale") for row in data["series"])
 
 
 def test_validate_honors_explicit_max_age():
