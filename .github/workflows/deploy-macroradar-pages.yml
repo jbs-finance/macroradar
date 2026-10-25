@@ -51,6 +51,11 @@ jobs:
           restore-keys: |
             macroradar-trade-${{ runner.os }}-
 
+      # out/ на раннере пустой, и откат сборщика на прошлый срез не срабатывал:
+      # разовый сбой Taldau ронял деплой целиком. Прошлые выгрузки берутся с прода.
+      - name: Seed previous snapshots from production
+        run: python scripts/seed_previous.py out
+
       - name: Collect macro pulse
         run: python etl.py out/pulse.json
 
