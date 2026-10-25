@@ -1,5 +1,6 @@
 from datetime import date
 
+import regional
 from industry import INDUSTRY_SERIES, KNOWN_GAPS, build, missing_series
 from regional import REGIONS, places_of
 
@@ -66,3 +67,52 @@ def test_gmk_series_cover_only_publishing_regions():
     assert "almaty" not in {slug for *_, slug in places_of(by_key["mining"])}
     assert len(places_of(by_key["metal_ores"])) == 12
     assert len(places_of(by_key["nonferrous"])) == 16
+
+
+def test_whole_missing_category_is_refetched(monkeypatch, tmp_path):
+    by_index: dict[str, list] = {}
+    for spec in INDUSTRY_SERIES:
+        by_index.setdefault(str(spec["index_id"]), []).extend(dump_for(spec))
+    production = by_index["701625"]
+    without_mining = [row for row in production if row["terms"][1] != 3078703]
+    calls: dict[str, int] = {}
+
+    def fetcher(url, **kwargs):
+        index = url.split("/")[-1].split("?")[0]
+        calls[index] = calls.get(index, 0) + 1
+        if index == "701625" and calls[index] == 1:
+            return without_mining
+        return by_index[index]
+
+    monkeypatch.setattr(regional.time, "sleep", lambda _seconds: None)
+    data = build(tmp_path / "industry.json", date(2026, 9, 23), fetcher)
+
+    assert calls["701625"] == 2
+    assert missing_series(data) == []
+    assert data["issues"] == []
+
+
+def test_permanently_missing_category_still_fails_hard(monkeypatch, tmp_path):
+    by_index: dict[str, list] = {}
+    for spec in INDUSTRY_SERIES:
+        by_index.setdefault(str(spec["index_id"]), []).extend(dump_for(spec))
+    by_index["701625"] = [
+        row for row in by_index["701625"] if row["terms"][1] != 3078703
+    ]
+    calls: dict[str, int] = {}
+
+    def fetcher(url, **kwargs):
+        index = url.split("/")[-1].split("?")[0]
+        calls[index] = calls.get(index, 0) + 1
+        return by_index[index]
+
+    monkeypatch.setattr(regional.time, "sleep", lambda _seconds: None)
+    data = build(tmp_path / "industry.json", date(2026, 9, 23), fetcher)
+
+    assert calls["701625"] == regional.SEMANTIC_RETRIES
+    assert len(missing_series(data)) == len(places_of(INDUSTRY_SERIES[0]))
+    assert all(
+        "неполный ответ по mining" in issue
+        for issue in data["issues"]
+        if ".mining." in issue
+    )
