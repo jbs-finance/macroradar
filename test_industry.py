@@ -76,8 +76,12 @@ def test_whole_missing_category_is_refetched(monkeypatch, tmp_path):
     production = by_index["701625"]
     without_mining = [row for row in production if row["terms"][1] != 3078703]
     calls: dict[str, int] = {}
+    urls: list[str] = []
+    headers: list[dict] = []
 
     def fetcher(url, **kwargs):
+        urls.append(url)
+        headers.append(kwargs["headers"])
         index = url.split("/")[-1].split("?")[0]
         calls[index] = calls.get(index, 0) + 1
         if index == "701625" and calls[index] == 1:
@@ -88,6 +92,8 @@ def test_whole_missing_category_is_refetched(monkeypatch, tmp_path):
     data = build(tmp_path / "industry.json", date(2026, 9, 23), fetcher)
 
     assert calls["701625"] == 2
+    assert "&_retry=1" in urls[1]
+    assert headers[1]["Cache-Control"] == "no-cache"
     assert missing_series(data) == []
     assert data["issues"] == []
 

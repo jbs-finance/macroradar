@@ -65,8 +65,8 @@ REGIONS: list[tuple[str, str, str]] = [
 ]
 
 GAP_VALUES = (None, "", "-", "x")
-SEMANTIC_RETRIES = 3
-SEMANTIC_RETRY_PAUSE = 1.5
+SEMANTIC_RETRIES = 5
+SEMANTIC_RETRY_PAUSE = 2.0
 
 
 def dump_url(spec: dict) -> str:
@@ -160,10 +160,20 @@ def build(
         try:
             for attempt in range(SEMANTIC_RETRIES):
                 if url not in dumps or attempt:
+                    # У Taldau несколько несогласованных ответов за одним URL:
+                    # один узел отдаёт полный разрез, другой — валидный JSON без
+                    # целой категории. Новый query key и no-cache не позволяют
+                    # следующим попыткам повторять тот же закэшированный ответ.
+                    request_url = url if not attempt else f"{url}&_retry={attempt}"
+                    headers = (
+                        TALDAU_HEADERS
+                        if not attempt
+                        else {**TALDAU_HEADERS, "Cache-Control": "no-cache"}
+                    )
                     dumps[url] = fetcher(
-                        url,
+                        request_url,
                         raw_name=f"{prefix}_{spec['series_key']}.json",
-                        headers=TALDAU_HEADERS,
+                        headers=headers,
                         max_body=spec.get("max_body", MAX_BODY),
                     )
                 rows, ambiguous = pick_rows(dumps[url], spec)
